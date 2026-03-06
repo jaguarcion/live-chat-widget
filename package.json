@@ -1,0 +1,19 @@
+{
+  "name": "livechat-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "dashboard",
+    "widget"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w backend",
+    "dev:dashboard": "npm run dev -w dashboard",
+    "dev:widget": "npm run dev -w widget",
+    "dev": "npm run dev:backend & npm run dev:dashboard & npm run dev:widget"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.10.2"
+  }
+}

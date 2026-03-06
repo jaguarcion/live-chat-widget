@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  password      String
+  name          String
+  role          String          @default("OPERATOR")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  conversations Conversation[]  @relation("AssignedOperator")
+  memberships   ProjectMember[]
+}
+
+model Project {
+  id            String           @id @default(uuid())
+  name          String
+  widgetKey     String           @unique @default(uuid())
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  conversations Conversation[]
+  members       ProjectMember[]
+  settings      ProjectSettings?
+  quickReplies  QuickReply[]
+}
+
+model ProjectMember {
+  id          String   @id @default(uuid())
+  userId      String
+  projectId   String
+  projectRole String   @default("OPERATOR")
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model Visitor {
+  id            String         @id @default(uuid())
+  email         String?
+  name          String?
+  country       String?
+  device        String?
+  referrer      String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+}
+
+model Conversation {
+  id         String    @id @default(uuid())
+  projectId  String
+  visitorId  String
+  operatorId String?
+  status     String    @default("OPEN")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  operator   User?     @relation("AssignedOperator", fields: [operatorId], references: [id])
+  visitor    Visitor   @relation(fields: [visitorId], references: [id])
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages   Message[]
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  sender         String
+  text           String?
+  type           String       @default("TEXT")
+  attachmentUrl  String?
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model QuickReply {
+  id        String   @id @default(uuid())
+  projectId String
+  title     String
+  text      String
+  shortcut  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ProjectSettings {
+  id               String   @id @default(uuid())
+  projectId        String   @unique
+  timezone         String   @default("Europe/Moscow")
+  businessHours    String   @default("[]")
+  isAlwaysOnline   Boolean  @default(true)
+  offlineMessage   String   @default("Оставьте сообщение, мы ответим как можно скорее")
+  isOfflineForm    Boolean  @default(true)
+  chatColor        String   @default("#6366f1")
+  buttonPosition   String   @default("bottom-right")
+  buttonStyle      String   @default("round")
+  coloredHeader    Boolean  @default(false)
+  onlineTitle      String   @default("Напишите нам, мы онлайн!")
+  offlineTitle     String   @default("Сейчас мы оффлайн")
+  welcomeText      String   @default("Мы онлайн ежедневно без выходных.\nОставьте сообщение — мы ответим на почту или здесь.")
+  soundEnabled     Boolean  @default(true)
+  showMobileButton Boolean  @default(true)
+  showLogo         Boolean  @default(true)
+  fileUpload       Boolean  @default(true)
+  messengerMode    Boolean  @default(true)
+  typingWatch      Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}

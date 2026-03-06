@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LiveChat Widget — Test</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 28px;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #64748b;
+      font-size: 15px;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .card h2 {
+      font-size: 16px;
+      color: #334155;
+      margin-bottom: 12px;
+    }
+
+    .card p {
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 6px;
+    }
+
+    code {
+      background: #f1f5f9;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #6366f1;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .input-group input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-group input:focus {
+      border-color: #6366f1;
+    }
+
+    .input-group button {
+      padding: 10px 20px;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .input-group button:hover {
+      background: #4f46e5;
+    }
+
+    .status {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #22c55e;
+      display: none;
+    }
+
+    .filler {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .filler p {
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>🚀 LiveChat Widget — Тест</h1>
+    <p class="subtitle">Введите projectId и нажмите «Запустить» для инициализации виджета</p>
+
+    <div class="card">
+      <h2>Настройка</h2>
+      <p>1. Запустите <code>backend</code> и <code>dashboard</code></p>
+      <p>2. Зарегистрируйтесь и создайте проект в Dashboard</p>
+      <p>3. Скопируйте <code>projectId</code> из проекта</p>
+      <p>4. Вставьте ниже и нажмите «Запустить»</p>
+
+      <div class="input-group">
+        <input type="text" id="projectIdInput" placeholder="Вставьте projectId..." />
+        <button id="startBtn">Запустить</button>
+      </div>
+      <div class="status" id="status">✓ Виджет запущен! Нажмите на кнопку чата внизу справа.</div>
+    </div>
+
+    <div class="filler">
+      <h2 style="font-size:16px; color:#334155; margin-bottom:12px;">Содержимое страницы</h2>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore
+        magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+        Excepteur sint occaecat cupidatat non proident.</p>
+      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem
+        aperiam, eaque ipsa quae ab illo inventore veritatis.</p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('startBtn').addEventListener('click', function () {
+      const projectId = document.getElementById('projectIdInput').value.trim();
+      if (!projectId) { alert('Введите projectId!'); return; }
+
+      // Set config and load widget
+      window.LiveChat = { projectId: projectId };
+
+      // Dynamically load the widget module
+      const script = document.createElement('script');
+      script.type = 'module';
+      script.src = '/src/main.ts';
+      document.body.appendChild(script);
+
+      document.getElementById('status').style.display = 'block';
+      this.disabled = true;
+      this.textContent = 'Запущен';
+    });
+  </script>
+</body>
+
+</html>
