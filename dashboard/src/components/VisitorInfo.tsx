@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { Conversation } from '../store/chatStore';
-import { updateConversation, updateVisitor } from '../api';
+import { updateConversation, updateVisitor, getVisitorPages } from '../api';
 import { useChatStore } from '../store/chatStore';
+import { format } from 'date-fns';
 
 interface Props {
     conversation: Conversation;
@@ -14,11 +15,17 @@ export default function VisitorInfo({ conversation }: Props) {
     const [notes, setNotes] = useState(visitor.notes || '');
     const [savingNotes, setSavingNotes] = useState(false);
     const [notesSaved, setNotesSaved] = useState(false);
+    const [pages, setPages] = useState<any[]>([]);
 
     // Sync notes when visitor changes
     useEffect(() => {
         setNotes(visitor.notes || '');
         setNotesSaved(false);
+
+        // Fetch pages
+        getVisitorPages(visitor.id)
+            .then(res => setPages(res.data))
+            .catch(err => console.error('Failed to fetch pages:', err));
     }, [visitor.id, visitor.notes]);
 
     const handleSaveNotes = async () => {
@@ -60,6 +67,13 @@ export default function VisitorInfo({ conversation }: Props) {
         { label: 'Referrer', value: visitor.referrer || '—' },
     ];
 
+    let utmData = null;
+    try {
+        if ((visitor as any).utmData) {
+            utmData = JSON.parse((visitor as any).utmData);
+        }
+    } catch (e) { }
+
     return (
         <div className="p-4 flex flex-col h-full overflow-y-auto">
             <h3 className="text-sm font-semibold text-text-primary mb-4 uppercase tracking-wider">
@@ -93,6 +107,47 @@ export default function VisitorInfo({ conversation }: Props) {
                 <div className="mb-6">
                     <span className="text-[10px] font-medium text-text-muted uppercase tracking-wider">Оператор</span>
                     <p className="text-sm text-text-secondary mt-0.5">{conversation.operator.name}</p>
+                </div>
+            )}
+
+            {/* UTM */}
+            {utmData && (
+                <div className="mb-6">
+                    <span className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-2 block">UTM Метки</span>
+                    <div className="bg-surface-tertiary rounded-lg p-3 space-y-2">
+                        {Object.entries(utmData).map(([key, value]) => value ? (
+                            <div key={key} className="flex justify-between items-center text-xs">
+                                <span className="text-text-muted">{key}:</span>
+                                <span className="text-text-primary font-medium">{String(value)}</span>
+                            </div>
+                        ) : null)}
+                    </div>
+                </div>
+            )}
+
+            {/* Pages */}
+            {pages.length > 0 && (
+                <div className="mb-6">
+                    <span className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-2 block">Последние страницы</span>
+                    <div className="space-y-2">
+                        {pages.map(page => (
+                            <div key={page.id} className="bg-surface-tertiary rounded-lg p-2">
+                                <a
+                                    href={page.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-primary hover:underline font-medium line-clamp-1 block mb-1"
+                                    title={page.title || page.url}
+                                >
+                                    {page.title || page.url}
+                                </a>
+                                <div className="text-[10px] text-text-muted flex justify-between">
+                                    <span className="truncate mr-2 max-w-[150px]" title={page.url}>{new URL(page.url).pathname}</span>
+                                    <span>{format(new Date(page.createdAt), 'HH:mm:ss')}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 

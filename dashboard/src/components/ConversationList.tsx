@@ -18,9 +18,9 @@ function ConversationItem({ conversation, isActive }: { conversation: Conversati
     return (
         <button
             onClick={() => setActiveConversation(conversation.id)}
-            className={`w-full text-left p-3 border-b border-border transition-all cursor-pointer border-x-0 border-t-0 ${isActive
-                ? 'bg-primary/10 border-l-2 border-l-primary'
-                : 'bg-transparent hover:bg-surface-tertiary/50'
+            className={`w-full text-left p-4 border-b border-border transition-all cursor-pointer border-x-0 border-t-0 hover:bg-surface-secondary ${isActive
+                ? 'bg-primary/5 !border-l-4 !border-l-primary'
+                : 'bg-transparent'
                 }`}
         >
             <div className="flex items-start gap-3">

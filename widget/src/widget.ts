@@ -80,7 +80,7 @@ export class LiveChatWidget {
                 this.applySettings(data.settings);
             }
 
-            this.updateOnlineUI(status.offlineMessage);
+            this.updateOnlineUI(status.offlineMessage, status.onlineOperators);
 
             const history = await getHistory(this.conversationId);
             this.messages = history;
@@ -185,13 +185,41 @@ export class LiveChatWidget {
         this.toggleBtn.appendChild(this.badgeEl);
     }
 
-    private updateOnlineUI(offlineMessage?: string) {
+    private updateOnlineUI(offlineMessage?: string, onlineOperators?: any[]) {
         if (this.isOnline) {
             this.headerTitleEl.textContent = this.onlineTitle;
             this.headerDotEl.classList.remove('offline');
             this.inputAreaEl.style.display = 'flex';
+
             const offlineForm = this.windowEl.querySelector('.livechat-offline-form');
             if (offlineForm) offlineForm.remove();
+
+            // Render online operators
+            const welcomeTextEl = this.windowEl.querySelector('.livechat-welcome-text');
+            if (welcomeTextEl && onlineOperators && onlineOperators.length > 0) {
+                let avatarsHtml = '<div class="livechat-operators-avatars" style="display:flex; justify-content:center; gap:12px; margin-bottom:12px;">';
+                onlineOperators.forEach(op => {
+                    const avatarUrl = op.avatarUrl;
+                    if (avatarUrl) {
+                        avatarsHtml += `
+                          <div style="position:relative;">
+                              <img src="${this.escapeHtml(avatarUrl)}" alt="Avatar" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid #fff; box-shadow:0 2px 4px rgba(0,0,0,0.1);" />
+                              <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; background:#22c55e; border-radius:50%; border:2px solid #fff;"></div>
+                          </div>`;
+                    } else {
+                        const initial = op.name ? op.name.charAt(0).toUpperCase() : 'O';
+                        avatarsHtml += `
+                          <div style="position:relative;">
+                              <div style="width:40px; height:40px; border-radius:50%; background:var(--primary-color, #6366f1); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; border:2px solid #fff; box-shadow:0 2px 4px rgba(0,0,0,0.1);">${initial}</div>
+                              <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; background:#22c55e; border-radius:50%; border:2px solid #fff;"></div>
+                          </div>`;
+                    }
+                });
+                avatarsHtml += '</div>';
+
+                welcomeTextEl.innerHTML = avatarsHtml + '<div style="font-weight: 500; font-size: 13px; color: #1e293b; margin-bottom: 4px;">Мы онлайн</div>' + welcomeTextEl.innerHTML;
+            }
+
         } else {
             this.headerTitleEl.textContent = this.offlineTitle;
             this.headerDotEl.classList.add('offline');
@@ -483,6 +511,12 @@ export class LiveChatWidget {
         this.attachBtn.classList.remove('livechat-hidden');
         this.sendBtn.classList.add('livechat-hidden');
 
+        // Immediately clear typing status
+        if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+            this.typingTimeout = null;
+        }
+        this.chatSocket.sendTyping(this.conversationId, false);
         this.chatSocket.sendMessage(this.conversationId, text);
     }
 
@@ -500,8 +534,58 @@ export class LiveChatWidget {
 
         this.messagesEl.innerHTML = '';
         this.messages.forEach(msg => {
+            const isJoin = msg.type === 'OPERATOR_JOIN';
+
+            if (isJoin) {
+                const eventEl = document.createElement('div');
+                eventEl.className = 'livechat-event';
+
+                let avatarHtml = '';
+                if (msg.user?.avatarUrl) {
+                    avatarHtml = `<img src="${msg.user.avatarUrl}" class="livechat-event-avatar" alt="Avatar">`;
+                } else {
+                    avatarHtml = `<div class="livechat-event-avatar" style="background: var(--primary-color); color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold;">${msg.user?.name?.[0] || 'O'}</div>`;
+                }
+
+                const titleHtml = msg.user?.title ? `<div class="livechat-event-subtext" style="font-weight: 500; color: var(--text-main); font-size: 11px; margin-top: 2px;">${msg.user.title}</div>` : '';
+
+                eventEl.innerHTML = `
+                    ${avatarHtml}
+                    <div class="livechat-event-text">${msg.user?.name || 'Оператор'}</div>
+                    ${titleHtml}
+                    <div class="livechat-event-subtext">теперь в чате</div>
+                `;
+                this.messagesEl.appendChild(eventEl);
+                return;
+            }
+
+            // Normal message
+            const wrapper = document.createElement('div');
+            wrapper.style.display = 'flex';
+            wrapper.style.flexDirection = 'column';
+            wrapper.style.width = '100%';
+            wrapper.style.position = 'relative';
+
+            if (msg.sender === 'OPERATOR') {
+                const authorEl = document.createElement('div');
+                authorEl.className = 'livechat-msg-author';
+                authorEl.textContent = msg.user?.name || 'Оператор';
+                wrapper.appendChild(authorEl);
+            }
+
             const msgEl = document.createElement('div');
             msgEl.className = `livechat-msg ${msg.sender.toLowerCase()}`;
+
+            if (msg.sender === 'OPERATOR') {
+                const avatarEl = document.createElement('div');
+                avatarEl.className = 'livechat-msg-avatar';
+                if (msg.user?.avatarUrl) {
+                    avatarEl.innerHTML = `<img src="${msg.user.avatarUrl}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
+                } else {
+                    avatarEl.textContent = msg.user?.name?.[0] || 'O';
+                }
+                msgEl.appendChild(avatarEl);
+            }
 
             if (msg.type === 'IMAGE' && msg.attachmentUrl) {
                 const img = document.createElement('img');
@@ -529,6 +613,7 @@ export class LiveChatWidget {
 
             if (msg.text) {
                 const textEl = document.createElement('div');
+                textEl.style.whiteSpace = 'pre-wrap';
                 textEl.textContent = msg.text;
                 msgEl.appendChild(textEl);
             }
@@ -538,7 +623,8 @@ export class LiveChatWidget {
             timeEl.textContent = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             msgEl.appendChild(timeEl);
 
-            this.messagesEl.appendChild(msgEl);
+            wrapper.appendChild(msgEl);
+            this.messagesEl.appendChild(wrapper);
         });
     }
 
@@ -560,15 +646,23 @@ export class LiveChatWidget {
     private handleTyping() {
         if (!this.conversationId) return;
 
-        if (this.typingTimeout) clearTimeout(this.typingTimeout);
-        else this.chatSocket.sendTyping(this.conversationId, true);
+        const currentText = this.inputEl.value.trim();
+
+        if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+        } else {
+            this.chatSocket.sendTyping(this.conversationId, true, currentText);
+        }
+
+        // Send intermediate text updates frequently
+        this.chatSocket.sendTyping(this.conversationId, true, currentText);
 
         this.typingTimeout = setTimeout(() => {
             if (this.conversationId) {
                 this.chatSocket.sendTyping(this.conversationId, false);
             }
             this.typingTimeout = null;
-        }, 2000);
+        }, 3000);
     }
 
     private showTypingIndicator(show: boolean) {

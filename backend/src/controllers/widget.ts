@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db';
 import { v4 as uuidv4 } from 'uuid';
+import { logEvent } from '../services/eventLogger';
+import { triggerWebhook } from '../services/webhookService';
+import { getIO } from '../socketInstance';
 
 export const initWidget = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -16,6 +19,9 @@ export const initWidget = async (req: Request, res: Response): Promise<void> => 
             res.status(404).json({ error: 'Project not found' });
             return;
         }
+
+        // Parse UTM data if provided
+        const utmData = metadata?.utm ? JSON.stringify(metadata.utm) : null;
 
         let visitor;
         if (existingVisitorId) {
@@ -33,6 +39,7 @@ export const initWidget = async (req: Request, res: Response): Promise<void> => 
                     referrer: metadata?.referrer,
                     device: metadata?.device,
                     country: metadata?.country || null,
+                    utmData,
                 }
             });
         } else {
@@ -42,6 +49,7 @@ export const initWidget = async (req: Request, res: Response): Promise<void> => 
                 data: {
                     referrer: metadata?.referrer || visitor.referrer,
                     device: metadata?.device || visitor.device,
+                    utmData: utmData || visitor.utmData,
                 }
             });
         }
@@ -55,11 +63,34 @@ export const initWidget = async (req: Request, res: Response): Promise<void> => 
             }
         });
 
+        let isNewConversation = false;
         if (!conversation) {
             conversation = await prisma.conversation.create({
                 data: {
                     projectId,
                     visitorId: visitor.id,
+                }
+            });
+            isNewConversation = true;
+
+            // Log event & trigger webhook for new conversation
+            logEvent(projectId, 'CONVERSATION_CREATED', {
+                conversationId: conversation.id,
+                visitorId: visitor.id,
+            });
+            triggerWebhook(projectId, 'new_conversation', {
+                conversationId: conversation.id,
+                visitorId: visitor.id,
+            });
+        }
+
+        // Track page view
+        if (metadata?.url) {
+            await prisma.pageView.create({
+                data: {
+                    visitorId: visitor.id,
+                    url: metadata.url,
+                    title: metadata.title || null,
                 }
             });
         }
@@ -94,12 +125,85 @@ export const getHistory = async (req: Request, res: Response): Promise<void> => 
 
         const messages = await prisma.message.findMany({
             where: { conversationId },
+            include: {
+                user: { select: { id: true, name: true, avatarUrl: true, title: true } }
+            },
             orderBy: { createdAt: 'asc' }
         });
 
         res.json(messages);
     } catch (error) {
         console.error('Widget history error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// POST /api/widget/message — REST fallback for sending visitor messages
+export const sendWidgetMessage = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { conversationId, text, type, attachmentUrl } = req.body;
+
+        if (!conversationId) {
+            res.status(400).json({ error: 'conversationId is required' });
+            return;
+        }
+
+        if (!text && !attachmentUrl) {
+            res.status(400).json({ error: 'text or attachmentUrl is required' });
+            return;
+        }
+
+        const conversation = await prisma.conversation.findUnique({
+            where: { id: conversationId },
+            select: { projectId: true }
+        });
+
+        if (!conversation) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+
+        const message = await prisma.message.create({
+            data: {
+                conversationId,
+                text: text || '',
+                type: type || 'TEXT',
+                attachmentUrl,
+                sender: 'VISITOR'
+            }
+        });
+
+        // Update conversation timestamp
+        await prisma.conversation.update({
+            where: { id: conversationId },
+            data: { updatedAt: new Date() }
+        });
+
+        // Broadcast via socket
+        try {
+            const io = getIO();
+            io.to(`conversation_${conversationId}`).emit('server_message', message);
+            if (conversation.projectId) {
+                io.to(`project_${conversation.projectId}`).emit('new_message', message);
+            }
+        } catch (e) {
+            console.error('Socket broadcast error:', e);
+        }
+
+        // Log event & trigger webhook
+        logEvent(conversation.projectId, 'MESSAGE_SENT', {
+            messageId: message.id,
+            sender: 'VISITOR',
+            conversationId,
+        });
+        triggerWebhook(conversation.projectId, 'new_message', {
+            message,
+            conversationId,
+        });
+
+        res.status(201).json(message);
+    } catch (error) {
+        console.error('Widget message error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

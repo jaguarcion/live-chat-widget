@@ -10,6 +10,9 @@ import conversationRoutes from './routes/conversations';
 import quickReplyRoutes from './routes/quickReplies';
 import visitorRoutes from './routes/visitors';
 import settingsRoutes from './routes/settings';
+import presenceRoutes from './routes/presence';
+import memberRoutes from './routes/members';
+import webhookRoutes from './routes/webhooks';
 import { setupSockets } from './sockets';
 import { setIO } from './socketInstance';
 
@@ -29,6 +32,9 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/quick-replies', quickReplyRoutes);
 app.use('/api/visitors', visitorRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/presence', presenceRoutes);
+app.use('/api/projects', memberRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 app.get('/', (req, res) => {
   res.send('LiveChat API is running');

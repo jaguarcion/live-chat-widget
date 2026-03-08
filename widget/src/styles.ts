@@ -227,6 +227,68 @@ export const widgetStyles = `
     background: var(--bg-light);
     color: var(--text-main);
     border-bottom-left-radius: 4px;
+    margin-left: 36px;
+  }
+
+  .livechat-msg-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    position: absolute;
+    left: -36px;
+    bottom: 0;
+    object-fit: cover;
+    background: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+  }
+
+  .livechat-msg-author {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    margin-left: 36px;
+  }
+
+  .livechat-event {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
+    width: 100%;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .livechat-event-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin-bottom: 10px;
+    object-fit: cover;
+  }
+
+  .livechat-event-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    text-align: center;
+  }
+
+  .livechat-event-subtext {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .livechat-msg-time {
@@ -470,4 +532,15 @@ export const widgetStyles = `
   .livechat-messages::-webkit-scrollbar { width: 4px; }
   .livechat-messages::-webkit-scrollbar-track { background: transparent; }
   .livechat-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+  .livechat-typing-indicator {
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    background: white;
+    border-top: 1px solid var(--border-color);
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
 `;

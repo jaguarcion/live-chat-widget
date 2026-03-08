@@ -8,27 +8,35 @@ datasource db {
 }
 
 model User {
-  id            String          @id @default(uuid())
-  email         String          @unique
+  id            String             @id @default(uuid())
+  email         String             @unique
   password      String
   name          String
-  role          String          @default("OPERATOR")
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  conversations Conversation[]  @relation("AssignedOperator")
+  avatarUrl     String?
+  title         String?
+  showInGreeting Boolean  @default(true)
+  role          String             @default("OPERATOR")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  conversations Conversation[]     @relation("AssignedOperator")
   memberships   ProjectMember[]
+  presences     OperatorPresence[]
+  messages      Message[]
 }
 
 model Project {
-  id            String           @id @default(uuid())
+  id            String             @id @default(uuid())
   name          String
-  widgetKey     String           @unique @default(uuid())
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  widgetKey     String             @unique @default(uuid())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
   conversations Conversation[]
   members       ProjectMember[]
   settings      ProjectSettings?
   quickReplies  QuickReply[]
+  events        Event[]
+  presences     OperatorPresence[]
+  webhooks      Webhook[]
 }
 
 model ProjectMember {
@@ -51,9 +59,11 @@ model Visitor {
   device        String?
   referrer      String?
   notes         String?
+  utmData       String?        // JSON: {source, medium, campaign, term, content}
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   conversations Conversation[]
+  pageViews     PageView[]
 }
 
 model Conversation {
@@ -79,7 +89,9 @@ model Message {
   attachmentUrl  String?
   isRead         Boolean      @default(false)
   createdAt      DateTime     @default(now())
+  senderId       String?
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [senderId], references: [id])
 }
 
 model QuickReply {
@@ -114,7 +126,59 @@ model ProjectSettings {
   fileUpload       Boolean  @default(true)
   messengerMode    Boolean  @default(true)
   typingWatch      Boolean  @default(true)
+  // SMTP / Email notifications
+  smtpHost         String?
+  smtpPort         Int?     @default(587)
+  smtpUser         String?
+  smtpPassword     String?
+  smtpFrom         String?
+  emailNotify      Boolean  @default(false)
+  webhookEnabled   Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Event {
+  id        String   @id @default(uuid())
+  projectId String
+  type      String   // CONVERSATION_CREATED, MESSAGE_SENT, OPERATOR_ASSIGNED, CONVERSATION_CLOSED
+  payload   String   @default("{}")
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model OperatorPresence {
+  id         String   @id @default(uuid())
+  userId     String
+  projectId  String
+  socketId   String
+  isOnline   Boolean  @default(true)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model PageView {
+  id        String   @id @default(uuid())
+  visitorId String
+  url       String
+  title     String?
+  createdAt DateTime @default(now())
+  visitor   Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+}
+
+model Webhook {
+  id        String   @id @default(uuid())
+  projectId String
+  url       String
+  events    String   @default("[]") // JSON array: ["new_message","new_conversation"]
+  secret    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

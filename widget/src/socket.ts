@@ -31,8 +31,8 @@ export class ChatSocket {
         this.socket?.emit('visitor_message', { conversationId, text, type, attachmentUrl });
     }
 
-    sendTyping(conversationId: string, isTyping: boolean) {
-        this.socket?.emit('typing', { conversationId, isTyping });
+    sendTyping(conversationId: string, isTyping: boolean, text?: string) {
+        this.socket?.emit('typing', { conversationId, isTyping, text });
     }
 
     onMessage(callback: (msg: any) => void) {

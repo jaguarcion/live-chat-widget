@@ -1,11 +1,14 @@
 import { create } from 'zustand';
-import { loginAPI, registerAPI } from '../api';
+import { loginAPI, registerAPI, authMeAPI } from '../api';
 
 interface User {
     id: string;
     email: string;
     name: string;
     role: string;
+    avatarUrl?: string;
+    title?: string;
+    showInGreeting?: boolean;
 }
 
 interface AuthState {
@@ -14,6 +17,7 @@ interface AuthState {
     isAuthenticated: boolean;
     login: (email: string, password: string) => Promise<void>;
     register: (email: string, password: string, name: string) => Promise<void>;
+    fetchUser: () => Promise<void>;
     logout: () => void;
 }
 
@@ -52,6 +56,17 @@ export const useAuthStore = create<AuthState>((set) => ({
         const { data } = await registerAPI(email, password, name);
         localStorage.setItem('token', data.token);
         set({ token: data.token, user: data.user, isAuthenticated: true });
+    },
+
+    fetchUser: async () => {
+        try {
+            const { data } = await authMeAPI();
+            set({ user: data.user });
+        } catch (error) {
+            console.error('Failed to fetch user:', error);
+            localStorage.removeItem('token');
+            set({ token: null, user: null, isAuthenticated: false });
+        }
     },
 
     logout: () => {

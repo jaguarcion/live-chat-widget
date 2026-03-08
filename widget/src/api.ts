@@ -26,8 +26,13 @@ export interface MessageData {
     conversationId: string;
     sender: string;
     text: string | null;
-    type: 'TEXT' | 'IMAGE' | 'FILE';
+    type: 'TEXT' | 'IMAGE' | 'FILE' | 'OPERATOR_JOIN';
     attachmentUrl?: string | null;
+    user?: {
+        name: string;
+        avatarUrl?: string;
+        title?: string;
+    };
     isRead: boolean;
     createdAt: string;
 }
@@ -42,6 +47,7 @@ export interface OnlineStatus {
     online: boolean;
     offlineMessage?: string;
     isOfflineForm?: boolean;
+    onlineOperators?: any[];
 }
 
 export async function checkOnline(projectId: string): Promise<OnlineStatus> {

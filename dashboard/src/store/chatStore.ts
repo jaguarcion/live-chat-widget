@@ -8,10 +8,16 @@ export interface Message {
     conversationId: string;
     sender: string;
     text: string | null;
-    type: 'TEXT' | 'IMAGE' | 'FILE';
+    type: 'TEXT' | 'IMAGE' | 'FILE' | 'OPERATOR_JOIN';
     attachmentUrl?: string | null;
     isRead: boolean;
     createdAt: string;
+    senderId?: string;
+    user?: {
+        name: string;
+        avatarUrl?: string;
+        title?: string;
+    };
 }
 
 export interface Visitor {
@@ -36,6 +42,12 @@ export interface Conversation {
     operator: { id: string; name: string; email: string } | null;
     project: { id: string; name: string };
     messages: Message[];
+    unreadCount?: number;
+}
+
+interface TypingData {
+    isTyping: boolean;
+    text?: string;
 }
 
 interface ChatState {
@@ -43,7 +55,7 @@ interface ChatState {
     activeConversationId: string | null;
     messages: Message[];
     socket: Socket | null;
-    typingStatus: Record<string, boolean>; // conversationId -> isTyping
+    typingStatus: Record<string, TypingData>; // conversationId -> TypingData
     loading: boolean;
 
     fetchConversations: () => Promise<void>;
@@ -76,6 +88,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
     setActiveConversation: async (id: string) => {
         set({ activeConversationId: id, messages: [] });
         await get().fetchMessages(id);
+
+        // Mark as read
+        try {
+            const { markConversationAsRead } = await import('../api');
+            await markConversationAsRead(id);
+            set(state => ({
+                conversations: state.conversations.map(c =>
+                    c.id === id ? { ...c, unreadCount: 0 } : c
+                )
+            }));
+
+            // Join socket room
+            const { socket } = get();
+            if (socket) {
+                socket.emit('join_conversation', { conversationId: id });
+            }
+        } catch (err) {
+            console.error('Failed to mark as read:', err);
+        }
     },
 
     fetchMessages: async (conversationId: string) => {
@@ -96,14 +127,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 set({ messages: [...state.messages, message] });
             }
         }
-        // Update conversation's last message
+        // Update conversation's last message and unread count
         set({
             conversations: state.conversations.map(c =>
                 c.id === message.conversationId
-                    ? { ...c, messages: [message], updatedAt: message.createdAt }
+                    ? {
+                        ...c,
+                        messages: [message],
+                        updatedAt: message.createdAt,
+                        unreadCount: (message.sender === 'VISITOR' && state.activeConversationId !== message.conversationId)
+                            ? (c.unreadCount || 0) + 1
+                            : c.unreadCount
+                    }
                     : c
             ).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
         });
+
+        // Clear typing status when message arrives
+        if (message.sender === 'VISITOR') {
+            set(state => ({
+                typingStatus: {
+                    ...state.typingStatus,
+                    [message.conversationId]: { isTyping: false, text: '' }
+                }
+            }));
+        }
     },
 
     connectSocket: (token: string, projectIds: string[]) => {
@@ -121,10 +169,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
             get().fetchConversations();
         });
 
-        socket.on('typing_status', (data: { conversationId: string, sender: 'VISITOR' | 'OPERATOR', isTyping: boolean }) => {
+        socket.on('typing_status', (data: { conversationId: string, sender: 'VISITOR' | 'OPERATOR', isTyping: boolean, text?: string }) => {
             if (data.sender === 'VISITOR') {
                 set(state => ({
-                    typingStatus: { ...state.typingStatus, [data.conversationId]: data.isTyping }
+                    typingStatus: {
+                        ...state.typingStatus,
+                        [data.conversationId]: { isTyping: data.isTyping, text: data.text }
+                    }
                 }));
             }
         });

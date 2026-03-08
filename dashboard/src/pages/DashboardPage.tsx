@@ -15,7 +15,7 @@ export default function DashboardPage() {
     const [showCreateProject, setShowCreateProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [creating, setCreating] = useState(false);
-    const [activeView, setActiveView] = useState<'chat' | 'settings'>('chat');
+    const [activeView, setActiveView] = useState<'chat' | 'settings' | 'dialogs' | 'channels' | 'team'>('chat');
 
     useEffect(() => {
         loadProjects();
@@ -66,8 +66,8 @@ export default function DashboardPage() {
         <div className="flex h-screen w-full overflow-hidden">
             <Sidebar activeView={activeView} onViewChange={setActiveView} />
 
-            {activeView === 'settings' ? (
-                <SettingsPage />
+            {activeView === 'settings' || activeView === 'team' ? (
+                <SettingsPage initialSection={activeView === 'team' ? 'team' : 'appearance'} />
             ) : (
                 <div className="flex flex-1 min-w-0">
                     {/* Conversations list */}

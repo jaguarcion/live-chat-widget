@@ -55,3 +55,21 @@ export const getVisitor = async (req: AuthRequest, res: Response): Promise<void>
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+// Get visitor's recent page views
+export const getVisitorPages = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+
+        const pages = await prisma.pageView.findMany({
+            where: { visitorId: id },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+        });
+
+        res.json(pages);
+    } catch (error) {
+        console.error('Get visitor pages error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

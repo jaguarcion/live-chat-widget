@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { getProjects, getProjectSettings, updateProjectSettings } from '../api';
+import { useState, useEffect, useRef } from 'react';
+import { getProjects, getProjectSettings, updateProjectSettings, getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember, getWebhooks, createWebhook, deleteWebhook, uploadFile } from '../api';
 
 interface BusinessHour {
     day: number;
@@ -20,16 +20,15 @@ const COLOR_PALETTE = [
     '#1e293b', '#334155', '#475569', '#64748b', '#78716c', '#92400e',
 ];
 
-type SettingsSection = 'appearance' | 'texts' | 'settings' | 'hours' | 'install';
+type SettingsSection = 'appearance' | 'texts' | 'settings' | 'hours' | 'smtp' | 'webhooks' | 'members' | 'install' | 'team';
 
-export default function SettingsPage() {
+export default function SettingsPage({ initialSection = 'appearance' }: { initialSection?: SettingsSection }) {
     const [projects, setProjects] = useState<any[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState('');
-    const [activeSection, setActiveSection] = useState<SettingsSection>('appearance');
+    const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [hoursConfigured, setHoursConfigured] = useState(false);
     const [isAlwaysOnline, setIsAlwaysOnline] = useState(true);
 
     // Settings state
@@ -37,6 +36,23 @@ export default function SettingsPage() {
     const [offlineMessage, setOfflineMessage] = useState('');
     const [isOfflineForm, setIsOfflineForm] = useState(true);
     const [hours, setHours] = useState<BusinessHour[]>(DEFAULT_HOURS);
+
+    // SMTP
+    const [smtpHost, setSmtpHost] = useState('');
+    const [smtpPort, setSmtpPort] = useState(587);
+    const [smtpUser, setSmtpUser] = useState('');
+    const [smtpPassword, setSmtpPassword] = useState('');
+    const [smtpFrom, setSmtpFrom] = useState('');
+    const [emailNotify, setEmailNotify] = useState(false);
+    const [webhookEnabled, setWebhookEnabled] = useState(false);
+
+    // Webhooks & Members Data
+    const [webhooks, setWebhooks] = useState<any[]>([]);
+    const [members, setMembers] = useState<any[]>([]);
+    const [newWebhookUrl, setNewWebhookUrl] = useState('');
+    const [newMemberEmail, setNewMemberEmail] = useState('');
+    const [editingMember, setEditingMember] = useState<any | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Appearance
     const [chatColor, setChatColor] = useState('#6366f1');
@@ -58,7 +74,16 @@ export default function SettingsPage() {
     const [typingWatch, setTypingWatch] = useState(true);
 
     useEffect(() => { loadProjects(); }, []);
-    useEffect(() => { if (selectedProjectId) loadSettings(selectedProjectId); }, [selectedProjectId]);
+    useEffect(() => {
+        if (initialSection) setActiveSection(initialSection);
+    }, [initialSection]);
+    useEffect(() => {
+        if (selectedProjectId) {
+            loadSettings(selectedProjectId);
+            loadWebhooks(selectedProjectId);
+            loadMembers(selectedProjectId);
+        }
+    }, [selectedProjectId]);
 
     const loadProjects = async () => {
         try {
@@ -77,7 +102,6 @@ export default function SettingsPage() {
             setIsOfflineForm(data.isOfflineForm);
             setIsAlwaysOnline(data.isAlwaysOnline ?? true);
             const hasHours = data.businessHours?.length > 0;
-            setHoursConfigured(hasHours);
             setHours(hasHours ? data.businessHours : DEFAULT_HOURS);
             setChatColor(data.chatColor || '#6366f1');
             setButtonPosition(data.buttonPosition || 'bottom-right');
@@ -92,9 +116,31 @@ export default function SettingsPage() {
             setFileUpload(data.fileUpload ?? true);
             setMessengerMode(data.messengerMode ?? true);
             setTypingWatch(data.typingWatch ?? true);
+
+            setSmtpHost(data.smtpHost || '');
+            setSmtpPort(data.smtpPort || 587);
+            setSmtpUser(data.smtpUser || '');
+            setSmtpPassword(data.smtpPassword || '');
+            setSmtpFrom(data.smtpFrom || '');
+            setEmailNotify(data.emailNotify || false);
+            setWebhookEnabled(data.webhookEnabled || false);
         } catch (err) {
             console.error('Failed to load settings:', err);
         }
+    };
+
+    const loadWebhooks = async (id: string) => {
+        try {
+            const res = await getWebhooks(id);
+            setWebhooks(res.data);
+        } catch (err) { console.error(err); }
+    };
+
+    const loadMembers = async (id: string) => {
+        try {
+            const res = await getProjectMembers(id);
+            setMembers(res.data);
+        } catch (err) { console.error(err); }
     };
 
     const handleSave = async () => {
@@ -105,6 +151,7 @@ export default function SettingsPage() {
                 chatColor, buttonPosition, buttonStyle, coloredHeader,
                 onlineTitle, offlineTitle, welcomeText,
                 soundEnabled, showMobileButton, showLogo, fileUpload, messengerMode, typingWatch,
+                smtpHost, smtpPort, smtpUser, smtpPassword, smtpFrom, emailNotify, webhookEnabled
             };
             // Send businessHours even if not configured if we are in schedule mode
             if (!isAlwaysOnline) {
@@ -121,7 +168,6 @@ export default function SettingsPage() {
     };
 
     const updateHour = (day: number, field: keyof BusinessHour, value: any) => {
-        setHoursConfigured(true);
         setHours(prev => prev.map(h => h.day === day ? { ...h, [field]: value } : h));
     };
 
@@ -130,6 +176,8 @@ export default function SettingsPage() {
         { key: 'texts', label: 'Тексты окна чата', icon: '💬' },
         { key: 'settings', label: 'Настройки', icon: '⚙️' },
         { key: 'hours', label: 'Рабочие часы', icon: '🕐' },
+        { key: 'smtp', label: 'Email интеграция', icon: '📧' },
+        { key: 'webhooks', label: 'Вебхуки', icon: '🔗' },
         { key: 'install', label: 'Установка', icon: '📦' },
     ];
 
@@ -472,6 +520,357 @@ export default function SettingsPage() {
                                     </div>
                                 </SectionBlock>
                             </>
+                        )}
+                    </div>
+                )}
+
+                {/* ======== SMTP ======== */}
+                {activeSection === 'smtp' && (
+                    <div>
+                        <h1 className="text-2xl font-bold text-text-primary mb-1">Email интеграция</h1>
+                        <p className="text-sm text-text-muted mb-8">Настройте SMTP для получения оффлайн сообщений на email</p>
+
+                        <ToggleRow
+                            label="Отправлять уведомления"
+                            description="Присылать сообщения с оффлайн формы на email операторов если никто не онлайн"
+                            checked={emailNotify}
+                            onChange={setEmailNotify}
+                        />
+
+                        <SectionBlock title="Настройки SMTP">
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-text-muted mb-1 block">SMTP Хост</label>
+                                        <input
+                                            value={smtpHost}
+                                            onChange={e => setSmtpHost(e.target.value)}
+                                            placeholder="smtp.yandex.ru"
+                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-text-muted mb-1 block">SMTP Порт</label>
+                                        <input
+                                            type="number"
+                                            value={smtpPort}
+                                            onChange={e => setSmtpPort(Number(e.target.value))}
+                                            placeholder="465 или 587"
+                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-text-muted mb-1 block">Пользователь (Email)</label>
+                                        <input
+                                            type="email"
+                                            value={smtpUser}
+                                            onChange={e => setSmtpUser(e.target.value)}
+                                            placeholder="user@domain.com"
+                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-text-muted mb-1 block">Пароль</label>
+                                        <input
+                                            type="password"
+                                            value={smtpPassword}
+                                            onChange={e => setSmtpPassword(e.target.value)}
+                                            placeholder="P@ssw0rd"
+                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-text-muted mb-1 block">От имени (From)</label>
+                                    <input
+                                        value={smtpFrom}
+                                        onChange={e => setSmtpFrom(e.target.value)}
+                                        placeholder="no-reply@domain.com"
+                                        className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                    />
+                                </div>
+                            </div>
+                        </SectionBlock>
+                    </div>
+                )}
+
+                {/* ======== WEBHOOKS ======== */}
+                {activeSection === 'webhooks' && (
+                    <div>
+                        <h1 className="text-2xl font-bold text-text-primary mb-1">Вебхуки</h1>
+                        <p className="text-sm text-text-muted mb-8">Получайте уведомления о событиях на ваш сервер</p>
+
+                        <ToggleRow
+                            label="Включить вебхуки"
+                            description="Глобальный переключатель работы вебхуков"
+                            checked={webhookEnabled}
+                            onChange={setWebhookEnabled}
+                        />
+
+                        <SectionBlock title="Ваши вебхуки">
+                            {webhooks.length === 0 ? (
+                                <div className="text-sm text-text-muted mb-4">У вас пока нет вебхуков</div>
+                            ) : (
+                                <div className="space-y-3 mb-6">
+                                    {webhooks.map(w => (
+                                        <div key={w.id} className="flex flex-col bg-surface-tertiary border border-border rounded-lg p-3 relative">
+                                            <div className="font-mono text-xs text-text-primary break-all pr-8 mb-2">{w.url}</div>
+                                            <div className="flex flex-wrap gap-1">
+                                                {w.events.map((ev: string) => (
+                                                    <span key={ev} className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] uppercase font-bold">{ev}</span>
+                                                ))}
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    await deleteWebhook(w.id);
+                                                    loadWebhooks(selectedProjectId);
+                                                }}
+                                                className="absolute top-3 right-3 text-text-muted hover:text-danger border-none bg-transparent cursor-pointer"
+                                                title="Удалить"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex gap-2">
+                                <input
+                                    value={newWebhookUrl}
+                                    onChange={e => setNewWebhookUrl(e.target.value)}
+                                    placeholder="https://yourserver.com/webhook"
+                                    className="flex-1 px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                />
+                                <button
+                                    onClick={async () => {
+                                        if (!newWebhookUrl) return;
+                                        await createWebhook(selectedProjectId, {
+                                            url: newWebhookUrl,
+                                            events: ['new_message', 'new_conversation', 'operator_assigned', 'conversation_closed']
+                                        });
+                                        setNewWebhookUrl('');
+                                        loadWebhooks(selectedProjectId);
+                                    }}
+                                    className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-all"
+                                >
+                                    Добавить
+                                </button>
+                            </div>
+                        </SectionBlock>
+                    </div>
+                )}
+
+                {/* ======== TEAM ======== */}
+                {activeSection === 'team' && (
+                    <div className="max-w-4xl">
+                        {!editingMember ? (
+                            <>
+                                <h1 className="text-2xl font-bold text-text-primary mb-1">Команда</h1>
+                                <p className="text-sm text-text-muted mb-8">Управление доступом операторов к проекту</p>
+
+                                <div className="space-y-4 mb-8">
+                                    {members.map((m) => (
+                                        <div
+                                            key={m.userId}
+                                            onClick={() => setEditingMember(m)}
+                                            className="flex items-center justify-between p-4 bg-surface-tertiary rounded-xl border border-border cursor-pointer hover:border-primary/50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-full overflow-hidden bg-primary flex items-center justify-center text-white font-bold text-lg">
+                                                    {m.user?.avatarUrl ? (
+                                                        <img src={m.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        m.user?.name?.[0] || 'U'
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <div className="text-base font-semibold text-text-primary flex items-center gap-2">
+                                                        {m.user.name || 'Без имени'}
+                                                        {m.projectRole === 'OWNER' && <span className="bg-primary/20 text-primary text-[10px] uppercase font-bold px-2 py-0.5 rounded">Владелец</span>}
+                                                        {m.projectRole === 'ADMIN' && <span className="bg-warning/20 text-warning text-[10px] uppercase font-bold px-2 py-0.5 rounded">Админ</span>}
+                                                    </div>
+                                                    <div className="text-sm text-text-muted">{m.user.title || m.user.email}</div>
+                                                </div>
+                                            </div>
+                                            <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                            </svg>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <SectionBlock title="Добавить участника">
+                                    <div className="flex gap-2 mb-6">
+                                        <input
+                                            type="email"
+                                            value={newMemberEmail}
+                                            onChange={e => setNewMemberEmail(e.target.value)}
+                                            placeholder="operator@example.com"
+                                            className="flex-1 px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                if (!newMemberEmail) return;
+                                                try {
+                                                    await addProjectMember(selectedProjectId, newMemberEmail, 'OPERATOR');
+                                                    setNewMemberEmail('');
+                                                    loadMembers(selectedProjectId);
+                                                } catch (err: any) {
+                                                    alert(err.response?.data?.error || 'Ошибка при добавлении');
+                                                }
+                                            }}
+                                            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-all"
+                                        >
+                                            Пригласить
+                                        </button>
+                                    </div>
+                                </SectionBlock>
+                            </>
+                        ) : (
+                            <div>
+                                <div className="mb-6 flex items-center gap-4">
+                                    <button
+                                        onClick={() => setEditingMember(null)}
+                                        className="p-2 rounded-lg bg-surface-secondary text-text-muted hover:text-text-primary transition-colors border-none cursor-pointer"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+                                    <div>
+                                        <h1 className="text-2xl font-bold text-text-primary mb-1">Редактирование оператора</h1>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="flex flex-col md:flex-row gap-6">
+                                        {/* Avatar Upload */}
+                                        <div className="flex flex-col items-center gap-3 w-48 shrink-0">
+                                            <div className="w-32 h-32 rounded-full overflow-hidden bg-surface-secondary border-2 border-border shadow-lg flex items-center justify-center text-4xl text-white font-bold">
+                                                {editingMember.user?.avatarUrl ? (
+                                                    <img src={editingMember.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    editingMember.user?.name?.[0] || 'U'
+                                                )}
+                                            </div>
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={async (e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (!file) return;
+                                                    try {
+                                                        const { data } = await uploadFile(file);
+                                                        const newAvatarUrl = data.url;
+                                                        await updateProjectMember(selectedProjectId, editingMember.userId, { avatarUrl: newAvatarUrl });
+                                                        setEditingMember({ ...editingMember, user: { ...editingMember.user, avatarUrl: newAvatarUrl } });
+                                                        loadMembers(selectedProjectId);
+                                                    } catch (err) {
+                                                        console.error('Failed to upload avatar', err);
+                                                        alert('Не удалось загрузить фото');
+                                                    }
+                                                }}
+                                            />
+                                            <button
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="text-sm font-medium text-primary hover:text-primary-light transition-colors border-none bg-transparent cursor-pointer"
+                                            >
+                                                Загрузить фото
+                                            </button>
+                                        </div>
+
+                                        {/* Main Form */}
+                                        <div className="flex-1 space-y-5">
+                                            <div>
+                                                <label className="text-sm font-semibold text-text-primary mb-1 block">Имя</label>
+                                                <input
+                                                    value={editingMember.user.name}
+                                                    onChange={e => setEditingMember({ ...editingMember, user: { ...editingMember.user, name: e.target.value } })}
+                                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-semibold text-text-primary mb-1 block">Должность</label>
+                                                <input
+                                                    value={editingMember.user.title || ''}
+                                                    onChange={e => setEditingMember({ ...editingMember, user: { ...editingMember.user, title: e.target.value } })}
+                                                    placeholder="Например, Служба поддержки"
+                                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                />
+                                            </div>
+
+                                            <ToggleRow
+                                                label="Показывать оператора на экране приветствия"
+                                                description="Оператор будет отображаться в списке онлайн-консультантов"
+                                                checked={editingMember.user.showInGreeting}
+                                                onChange={v => setEditingMember({ ...editingMember, user: { ...editingMember.user, showInGreeting: v } })}
+                                            />
+
+                                            <div className="pt-4 border-t border-border">
+                                                <label className="text-sm font-semibold text-text-primary mb-1 block">Адрес электронной почты</label>
+                                                <input
+                                                    value={editingMember.user.email}
+                                                    disabled
+                                                    className="w-full px-3 py-2 rounded-lg bg-surface-secondary text-text-muted text-sm border-none cursor-not-allowed"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="text-sm font-semibold text-text-primary mb-1 block">Роль</label>
+                                                <select
+                                                    value={editingMember.projectRole}
+                                                    onChange={e => setEditingMember({ ...editingMember, projectRole: e.target.value })}
+                                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                >
+                                                    <option value="OPERATOR">Оператор</option>
+                                                    <option value="ADMIN">Администратор</option>
+                                                    <option value="OWNER">Владелец</option>
+                                                </select>
+                                                <p className="text-xs text-text-muted mt-1">Определите уровень доступа участника к настройкам проекта</p>
+                                            </div>
+
+                                            <div className="flex gap-4 pt-6">
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            await updateProjectMember(selectedProjectId, editingMember.userId, {
+                                                                name: editingMember.user.name,
+                                                                title: editingMember.user.title,
+                                                                showInGreeting: editingMember.user.showInGreeting,
+                                                                projectRole: editingMember.projectRole
+                                                            });
+                                                            loadMembers(selectedProjectId);
+                                                            setEditingMember(null);
+                                                        } catch (err) {
+                                                            alert('Не удалось сохранить изменения');
+                                                        }
+                                                    }}
+                                                    className="px-6 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-medium transition-colors"
+                                                >
+                                                    Сохранить изменения
+                                                </button>
+
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!confirm('Вы уверены, что хотите удалить этого оператора из проекта?')) return;
+                                                        await removeProjectMember(selectedProjectId, editingMember.userId);
+                                                        loadMembers(selectedProjectId);
+                                                        setEditingMember(null);
+                                                    }}
+                                                    className="px-6 py-2.5 rounded-lg bg-danger/10 hover:bg-danger/20 text-danger font-medium transition-colors border-none cursor-pointer"
+                                                >
+                                                    Удалить
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
                 )}

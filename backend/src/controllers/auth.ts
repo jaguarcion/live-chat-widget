@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { AuthRequest } from '../middlewares/auth';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
@@ -28,7 +29,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
         const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
-        res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+        res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl, title: user.title, showInGreeting: user.showInGreeting } });
     } catch (error) {
         console.error('Registration error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -53,9 +54,30 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
         const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
-        res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+        res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl, title: user.title, showInGreeting: user.showInGreeting } });
     } catch (error) {
         console.error('Login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+
+        res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl, title: user.title, showInGreeting: user.showInGreeting } });
+    } catch (error) {
+        console.error('Get Me error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
