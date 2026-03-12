@@ -15,7 +15,7 @@ services:
       context: ./backend
     restart: always
     ports:
-      - "3001:3001"
+      - "5001:3001"
     environment:
       - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD:-rootpassword}@mysql:3306/${MYSQL_DATABASE:-livechat}
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
