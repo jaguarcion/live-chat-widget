@@ -29,9 +29,9 @@ services:
     build:
       context: ./dashboard
       args:
-        - VITE_API_URL=http://localhost:3001
-        - VITE_WS_URL=http://localhost:3001
-        - VITE_WIDGET_URL=http://localhost:5174
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:3001}
+        - VITE_WS_URL=${VITE_WS_URL:-http://localhost:3001}
+        - VITE_WIDGET_URL=${VITE_WIDGET_URL:-http://localhost:5174}
     restart: always
     ports:
       - "5173:80"
@@ -42,8 +42,8 @@ services:
     build:
       context: ./widget
       args:
-        - VITE_API_URL=http://localhost:3001
-        - VITE_WS_URL=http://localhost:3001
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:3001}
+        - VITE_WS_URL=${VITE_WS_URL:-http://localhost:3001}
     restart: always
     ports:
       - "5174:80"
