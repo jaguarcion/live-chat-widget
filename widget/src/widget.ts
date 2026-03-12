@@ -46,6 +46,8 @@ export class LiveChatWidget {
 
         this.container = document.createElement('div');
         this.container.id = 'livechat-widget-host';
+        this.container.style.opacity = '0';
+        this.container.style.transition = 'opacity 0.3s ease-in-out';
         document.body.appendChild(this.container);
 
         this.root = this.container.attachShadow({ mode: 'open' });
@@ -83,7 +85,17 @@ export class LiveChatWidget {
             if (data.settings) {
                 this.applySettings(data.settings);
                 if (data.settings.prechatFields) {
-                    this.prechatFields = data.settings.prechatFields.filter((f: any) => f.enabled);
+                    try {
+                        let fields = data.settings.prechatFields;
+                        if (typeof fields === 'string') {
+                            fields = JSON.parse(fields);
+                        }
+                        if (Array.isArray(fields)) {
+                            this.prechatFields = fields.filter((f: any) => f.enabled);
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse prechatFields', e);
+                    }
                 }
             }
 
@@ -122,8 +134,10 @@ export class LiveChatWidget {
                     this.showTypingIndicator(data.isTyping);
                 }
             });
+            this.container.style.opacity = '1';
         } catch (err) {
             console.error('LiveChat init error:', err);
+            this.container.style.opacity = '1';
         }
     }
 
