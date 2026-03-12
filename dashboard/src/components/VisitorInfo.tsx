@@ -16,6 +16,7 @@ export default function VisitorInfo({ conversation }: Props) {
     const [savingNotes, setSavingNotes] = useState(false);
     const [notesSaved, setNotesSaved] = useState(false);
     const [pages, setPages] = useState<any[]>([]);
+    const [visiblePagesCount, setVisiblePagesCount] = useState(5);
 
     // Sync notes when visitor changes
     useEffect(() => {
@@ -130,7 +131,7 @@ export default function VisitorInfo({ conversation }: Props) {
                 <div className="mb-6">
                     <span className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-2 block">Последние страницы</span>
                     <div className="space-y-2">
-                        {pages.map(page => (
+                        {pages.slice(0, visiblePagesCount).map(page => (
                             <div key={page.id} className="bg-surface-tertiary rounded-lg p-2">
                                 <a
                                     href={page.url}
@@ -148,6 +149,14 @@ export default function VisitorInfo({ conversation }: Props) {
                             </div>
                         ))}
                     </div>
+                    {pages.length > visiblePagesCount && (
+                        <button
+                            onClick={() => setVisiblePagesCount(prev => prev + 5)}
+                            className="w-full mt-2 py-1.5 rounded-lg bg-surface-tertiary text-text-muted text-xs font-medium hover:bg-surface-tertiary/80 hover:text-text-secondary transition-all border-none cursor-pointer"
+                        >
+                            Показать больше ({pages.length - visiblePagesCount})
+                        </button>
+                    )}
                 </div>
             )}
 

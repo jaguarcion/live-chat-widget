@@ -56,6 +56,7 @@ interface ChatState {
     messages: Message[];
     socket: Socket | null;
     typingStatus: Record<string, TypingData>; // conversationId -> TypingData
+    onlineVisitors: Set<string>; // visitorIds that are currently online in the widget
     loading: boolean;
 
     fetchConversations: () => Promise<void>;
@@ -73,6 +74,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     messages: [],
     socket: null,
     typingStatus: {},
+    onlineVisitors: new Set<string>(),
     loading: false,
 
     fetchConversations: async () => {
@@ -158,7 +160,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const socket = io('/', { transports: ['websocket'] });
 
         socket.on('connect', () => {
-            socket.emit('operator_connect', { token, projectIds });
+            const savedStatus = localStorage.getItem('operator_status') || 'online';
+            socket.emit('operator_connect', { token, projectIds, status: savedStatus });
         });
 
         socket.on('new_message', (message: Message) => {
@@ -178,6 +181,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
                     }
                 }));
             }
+        });
+
+        socket.on('visitor_online', (data: { conversationId: string; visitorId: string }) => {
+            set(state => {
+                const next = new Set(state.onlineVisitors);
+                next.add(data.visitorId);
+                return { onlineVisitors: next };
+            });
+        });
+
+        socket.on('visitor_offline', (data: { conversationId: string; visitorId: string }) => {
+            set(state => {
+                const next = new Set(state.onlineVisitors);
+                next.delete(data.visitorId);
+                return { onlineVisitors: next };
+            });
         });
 
         set({ socket });

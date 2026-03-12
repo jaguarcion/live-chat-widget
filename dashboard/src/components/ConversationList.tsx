@@ -11,7 +11,7 @@ function timeAgo(dateStr: string): string {
     return `${Math.floor(hours / 24)}д`;
 }
 
-function ConversationItem({ conversation, isActive }: { conversation: Conversation; isActive: boolean }) {
+function ConversationItem({ conversation, isActive, isOnline }: { conversation: Conversation; isActive: boolean; isOnline: boolean }) {
     const { setActiveConversation } = useChatStore();
     const lastMessage = conversation.messages[0];
 
@@ -33,8 +33,14 @@ function ConversationItem({ conversation, isActive }: { conversation: Conversati
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-sm font-medium text-text-primary truncate">
+                        <span className="text-sm font-medium text-text-primary truncate flex items-center gap-1.5">
                             {conversation.visitor.name || conversation.visitor.email || `Посетитель`}
+                            {isOnline && (
+                                <span className="relative flex h-2 w-2 flex-shrink-0">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                </span>
+                            )}
                         </span>
                         <span className="text-xs text-text-muted flex-shrink-0 ml-2">
                             {timeAgo(conversation.updatedAt)}
@@ -61,7 +67,7 @@ function ConversationItem({ conversation, isActive }: { conversation: Conversati
 }
 
 export default function ConversationList() {
-    const { conversations, activeConversationId, loading } = useChatStore();
+    const { conversations, activeConversationId, loading, onlineVisitors } = useChatStore();
 
     if (loading && conversations.length === 0) {
         return (
@@ -90,6 +96,7 @@ export default function ConversationList() {
                     key={conv.id}
                     conversation={conv}
                     isActive={activeConversationId === conv.id}
+                    isOnline={onlineVisitors.has(conv.visitorId)}
                 />
             ))}
         </div>

@@ -15,7 +15,7 @@ export default function DashboardPage() {
     const [showCreateProject, setShowCreateProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [creating, setCreating] = useState(false);
-    const [activeView, setActiveView] = useState<'chat' | 'settings' | 'dialogs' | 'channels' | 'team'>('chat');
+    const [activeView, setActiveView] = useState<'chat' | 'settings' | 'dialogs' | 'channels'>('chat');
 
     useEffect(() => {
         loadProjects();
@@ -66,21 +66,14 @@ export default function DashboardPage() {
         <div className="flex h-screen w-full overflow-hidden">
             <Sidebar activeView={activeView} onViewChange={setActiveView} />
 
-            {activeView === 'settings' || activeView === 'team' ? (
-                <SettingsPage initialSection={activeView === 'team' ? 'team' : 'appearance'} />
+            {activeView === 'settings' ? (
+                <SettingsPage initialSection={'appearance'} />
             ) : (
                 <div className="flex flex-1 min-w-0">
                     {/* Conversations list */}
                     <div className="w-80 flex-shrink-0 border-r border-border bg-surface-secondary flex flex-col">
                         <div className="p-4 border-b border-border flex items-center justify-between">
                             <h2 className="text-lg font-semibold text-text-primary">Диалоги</h2>
-                            <button
-                                onClick={() => setShowCreateProject(true)}
-                                className="text-xs text-primary hover:text-primary-light transition-colors bg-transparent border-none cursor-pointer"
-                                title="Создать проект"
-                            >
-                                + Проект
-                            </button>
                         </div>
                         <ConversationList />
                     </div>

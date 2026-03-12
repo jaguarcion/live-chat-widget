@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getProjects, getProjectSettings, updateProjectSettings, getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember, getWebhooks, createWebhook, deleteWebhook, uploadFile } from '../api';
+import { getProjects, getProjectSettings, updateProjectSettings, getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember, getWebhooks, createWebhook, deleteWebhook, uploadFile, createProject } from '../api';
 
 interface BusinessHour {
     day: number;
@@ -30,6 +30,7 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isAlwaysOnline, setIsAlwaysOnline] = useState(true);
+    const [showCreateModal, setShowCreateModal] = useState(false);
 
     // Settings state
     const [timezone, setTimezone] = useState('Europe/Moscow');
@@ -179,731 +180,813 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
         { key: 'smtp', label: 'Email интеграция', icon: '📧' },
         { key: 'webhooks', label: 'Вебхуки', icon: '🔗' },
         { key: 'install', label: 'Установка', icon: '📦' },
+        { key: 'team', label: 'Операторы', icon: '👥' },
     ];
 
     if (loading) return <div className="flex-1 flex items-center justify-center text-text-muted">Загрузка...</div>;
 
     return (
-        <div className="flex-1 flex h-screen overflow-hidden">
-            {/* Left sidebar navigation */}
-            <div className="w-64 bg-surface border-r border-border flex flex-col flex-shrink-0">
-                <div className="p-4 border-b border-border">
-                    <h2 className="text-base font-semibold text-text-primary">Настройки</h2>
-                </div>
+        <>
+            <div className="flex-1 flex h-screen overflow-hidden">
+                {/* Left sidebar navigation */}
+                <div className="w-64 bg-surface border-r border-border flex flex-col flex-shrink-0">
+                    <div className="p-4 border-b border-border">
+                        <h2 className="text-base font-semibold text-text-primary">Настройки</h2>
+                    </div>
 
-                {/* Project selector */}
-                <div className="p-3">
-                    <select
-                        value={selectedProjectId}
-                        onChange={e => setSelectedProjectId(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    >
-                        {projects.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                {/* Section label */}
-                <div className="px-4 pt-3 pb-1">
-                    <span className="text-[10px] font-semibold text-text-muted uppercase tracking-widest">Чат на сайте</span>
-                </div>
-
-                {/* Nav items */}
-                <nav className="flex-1 px-2 space-y-0.5">
-                    {navItems.map(item => (
-                        <button
-                            key={item.key}
-                            onClick={() => setActiveSection(item.key)}
-                            className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all border-none cursor-pointer flex items-center gap-2.5 ${activeSection === item.key
-                                ? 'bg-primary/15 text-primary font-medium'
-                                : 'bg-transparent text-text-secondary hover:bg-surface-tertiary/50 hover:text-text-primary'
-                                }`}
-                        >
-                            <span className="text-base">{item.icon}</span>
-                            {item.label}
-                        </button>
-                    ))}
-                </nav>
-
-                {/* Save button in sidebar */}
-                <div className="p-3 border-t border-border">
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-all disabled:opacity-50 border-none cursor-pointer"
-                    >
-                        {saving ? 'Сохранение...' : saved ? '✓ Сохранено' : 'Сохранить'}
-                    </button>
-                </div>
-            </div>
-
-            {/* Main content */}
-            <div className="flex-1 overflow-y-auto p-8 max-w-3xl">
-                {/* ======== APPEARANCE ======== */}
-                {activeSection === 'appearance' && (
-                    <div>
-                        <h1 className="text-2xl font-bold text-text-primary mb-1">Внешний вид</h1>
-                        <p className="text-sm text-text-muted mb-8">Настройте цвет и стиль виджета чата</p>
-
-                        {/* Color palette */}
-                        <SectionBlock title="Цветовая гамма чата">
-                            <div className="flex flex-wrap gap-2 mb-3">
-                                {COLOR_PALETTE.map(color => (
-                                    <button
-                                        key={color}
-                                        onClick={() => setChatColor(color)}
-                                        className="w-8 h-8 rounded-lg border-2 transition-all cursor-pointer"
-                                        style={{
-                                            backgroundColor: color,
-                                            borderColor: chatColor === color ? '#fff' : 'transparent',
-                                            boxShadow: chatColor === color ? `0 0 0 2px ${color}` : 'none',
-                                        }}
-                                    />
+                    {/* Project selector */}
+                    <div className="p-3">
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={selectedProjectId}
+                                onChange={e => setSelectedProjectId(e.target.value)}
+                                className="flex-1 px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            >
+                                {projects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
                                 ))}
-                            </div>
-                            <div className="flex items-center gap-2">
+                            </select>
+                            <button
+                                onClick={() => setShowCreateModal(true)}
+                                className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors border-none cursor-pointer text-lg font-bold"
+                                title="Создать проект"
+                            >
+                                +
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Section label */}
+                    <div className="px-4 pt-3 pb-1">
+                        <span className="text-[10px] font-semibold text-text-muted uppercase tracking-widest">Чат на сайте</span>
+                    </div>
+
+                    {/* Nav items */}
+                    <nav className="flex-1 px-2 space-y-0.5">
+                        {navItems.map(item => (
+                            <button
+                                key={item.key}
+                                onClick={() => setActiveSection(item.key)}
+                                className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all border-none cursor-pointer flex items-center gap-2.5 ${activeSection === item.key
+                                    ? 'bg-primary/15 text-primary font-medium'
+                                    : 'bg-transparent text-text-secondary hover:bg-surface-tertiary/50 hover:text-text-primary'
+                                    }`}
+                            >
+                                <span className="text-base">{item.icon}</span>
+                                {item.label}
+                            </button>
+                        ))}
+                    </nav>
+
+                    {/* Save button in sidebar */}
+                    <div className="p-3 border-t border-border">
+                        <button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="w-full py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-all disabled:opacity-50 border-none cursor-pointer"
+                        >
+                            {saving ? 'Сохранение...' : saved ? '✓ Сохранено' : 'Сохранить'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Main content */}
+                <div className="flex-1 overflow-y-auto p-8 max-w-3xl">
+                    {/* ======== APPEARANCE ======== */}
+                    {activeSection === 'appearance' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Внешний вид</h1>
+                            <p className="text-sm text-text-muted mb-8">Настройте цвет и стиль виджета чата</p>
+
+                            {/* Color palette */}
+                            <SectionBlock title="Цветовая гамма чата">
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    {COLOR_PALETTE.map(color => (
+                                        <button
+                                            key={color}
+                                            onClick={() => setChatColor(color)}
+                                            className="w-8 h-8 rounded-lg border-2 transition-all cursor-pointer"
+                                            style={{
+                                                backgroundColor: color,
+                                                borderColor: chatColor === color ? '#fff' : 'transparent',
+                                                boxShadow: chatColor === color ? `0 0 0 2px ${color}` : 'none',
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={chatColor}
+                                        onChange={e => setChatColor(e.target.value)}
+                                        className="w-8 h-8 rounded cursor-pointer border-none"
+                                    />
+                                    <span className="text-xs text-text-muted font-mono">{chatColor}</span>
+                                </div>
+                            </SectionBlock>
+
+                            {/* Colored header toggle */}
+                            <ToggleRow
+                                label="Сделать шапку чата цветной"
+                                description="Заголовок виджета будет в выбранном цвете"
+                                checked={coloredHeader}
+                                onChange={setColoredHeader}
+                            />
+
+                            {/* Button style */}
+                            <SectionBlock title="Стиль кнопки чата">
+                                <select
+                                    value={buttonStyle}
+                                    onChange={e => setButtonStyle(e.target.value)}
+                                    className="px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                >
+                                    <option value="round">Круглая кнопка</option>
+                                    <option value="horizontal">Горизонтальный ярлык</option>
+                                </select>
+                            </SectionBlock>
+
+                            {/* Button position */}
+                            <SectionBlock title="Положение кнопки чата">
+                                <select
+                                    value={buttonPosition}
+                                    onChange={e => setButtonPosition(e.target.value)}
+                                    className="px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                >
+                                    <option value="bottom-right">Снизу страницы в правом углу</option>
+                                    <option value="bottom-left">Снизу страницы в левом углу</option>
+                                </select>
+                                <p className="text-xs text-text-muted mt-1">Для увеличения количества обращений рекомендуем ставить чат в нижний правый угол окна</p>
+                            </SectionBlock>
+
+                            {/* Logo toggle */}
+                            <ToggleRow
+                                label="Показывать логотип в окне виджета"
+                                description="Powered by LiveChat"
+                                checked={showLogo}
+                                onChange={setShowLogo}
+                            />
+
+                            {/* Preview */}
+                            <SectionBlock title="Предпросмотр">
+                                <div className="flex gap-6">
+                                    <WidgetPreview
+                                        type="online"
+                                        color={chatColor}
+                                        coloredHeader={coloredHeader}
+                                        title={onlineTitle}
+                                        text={welcomeText}
+                                    />
+                                    <WidgetPreview
+                                        type="offline"
+                                        color={chatColor}
+                                        coloredHeader={coloredHeader}
+                                        title={offlineTitle}
+                                        text={welcomeText}
+                                    />
+                                </div>
+                            </SectionBlock>
+                        </div>
+                    )}
+
+                    {/* ======== TEXTS ======== */}
+                    {activeSection === 'texts' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Тексты окна чата</h1>
+                            <p className="text-sm text-text-muted mb-8">Настройте тексты, которые видят посетители</p>
+
+                            <SectionBlock title="Заголовок (онлайн)">
                                 <input
-                                    type="color"
-                                    value={chatColor}
-                                    onChange={e => setChatColor(e.target.value)}
-                                    className="w-8 h-8 rounded cursor-pointer border-none"
+                                    value={onlineTitle}
+                                    onChange={e => setOnlineTitle(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                                 />
-                                <span className="text-xs text-text-muted font-mono">{chatColor}</span>
-                            </div>
-                        </SectionBlock>
+                            </SectionBlock>
 
-                        {/* Colored header toggle */}
-                        <ToggleRow
-                            label="Сделать шапку чата цветной"
-                            description="Заголовок виджета будет в выбранном цвете"
-                            checked={coloredHeader}
-                            onChange={setColoredHeader}
-                        />
-
-                        {/* Button style */}
-                        <SectionBlock title="Стиль кнопки чата">
-                            <select
-                                value={buttonStyle}
-                                onChange={e => setButtonStyle(e.target.value)}
-                                className="px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            >
-                                <option value="round">Круглая кнопка</option>
-                                <option value="horizontal">Горизонтальный ярлык</option>
-                            </select>
-                        </SectionBlock>
-
-                        {/* Button position */}
-                        <SectionBlock title="Положение кнопки чата">
-                            <select
-                                value={buttonPosition}
-                                onChange={e => setButtonPosition(e.target.value)}
-                                className="px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            >
-                                <option value="bottom-right">Снизу страницы в правом углу</option>
-                                <option value="bottom-left">Снизу страницы в левом углу</option>
-                            </select>
-                            <p className="text-xs text-text-muted mt-1">Для увеличения количества обращений рекомендуем ставить чат в нижний правый угол окна</p>
-                        </SectionBlock>
-
-                        {/* Logo toggle */}
-                        <ToggleRow
-                            label="Показывать логотип в окне виджета"
-                            description="Powered by LiveChat"
-                            checked={showLogo}
-                            onChange={setShowLogo}
-                        />
-
-                        {/* Preview */}
-                        <SectionBlock title="Предпросмотр">
-                            <div className="flex gap-6">
-                                <WidgetPreview
-                                    type="online"
-                                    color={chatColor}
-                                    coloredHeader={coloredHeader}
-                                    title={onlineTitle}
-                                    text={welcomeText}
+                            <SectionBlock title="Заголовок (оффлайн)">
+                                <input
+                                    value={offlineTitle}
+                                    onChange={e => setOfflineTitle(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                                 />
-                                <WidgetPreview
-                                    type="offline"
-                                    color={chatColor}
-                                    coloredHeader={coloredHeader}
-                                    title={offlineTitle}
-                                    text={welcomeText}
+                            </SectionBlock>
+
+                            <SectionBlock title="Приветственный текст">
+                                <textarea
+                                    value={welcomeText}
+                                    onChange={e => setWelcomeText(e.target.value)}
+                                    rows={3}
+                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm placeholder-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                    placeholder="Текст, отображаемый в окне чата до начала диалога"
                                 />
-                            </div>
-                        </SectionBlock>
-                    </div>
-                )}
+                            </SectionBlock>
 
-                {/* ======== TEXTS ======== */}
-                {activeSection === 'texts' && (
-                    <div>
-                        <h1 className="text-2xl font-bold text-text-primary mb-1">Тексты окна чата</h1>
-                        <p className="text-sm text-text-muted mb-8">Настройте тексты, которые видят посетители</p>
+                            <SectionBlock title="Оффлайн сообщение">
+                                <textarea
+                                    value={offlineMessage}
+                                    onChange={e => setOfflineMessage(e.target.value)}
+                                    rows={2}
+                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm placeholder-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                    placeholder="Сообщение для посетителей вне рабочих часов"
+                                />
+                            </SectionBlock>
 
-                        <SectionBlock title="Заголовок (онлайн)">
-                            <input
-                                value={onlineTitle}
-                                onChange={e => setOnlineTitle(e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            <ToggleRow
+                                label="Показывать форму обратной связи"
+                                description="Email + сообщение когда операторы оффлайн"
+                                checked={isOfflineForm}
+                                onChange={setIsOfflineForm}
                             />
-                        </SectionBlock>
 
-                        <SectionBlock title="Заголовок (оффлайн)">
-                            <input
-                                value={offlineTitle}
-                                onChange={e => setOfflineTitle(e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            {/* Live preview */}
+                            <SectionBlock title="Предпросмотр">
+                                <div className="flex gap-6">
+                                    <WidgetPreview
+                                        type="online"
+                                        color={chatColor}
+                                        coloredHeader={coloredHeader}
+                                        title={onlineTitle}
+                                        text={welcomeText}
+                                    />
+                                    <WidgetPreview
+                                        type="offline"
+                                        color={chatColor}
+                                        coloredHeader={coloredHeader}
+                                        title={offlineTitle}
+                                        text={welcomeText}
+                                    />
+                                </div>
+                            </SectionBlock>
+                        </div>
+                    )}
+
+                    {/* ======== SETTINGS ======== */}
+                    {activeSection === 'settings' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Настройки</h1>
+                            <p className="text-sm text-text-muted mb-8">Функциональные настройки виджета</p>
+
+                            <ToggleRow
+                                label="Режим мессенджера"
+                                description="Включить режим мессенджера, когда операторы не в сети. Если выключен, виджет не будет отображаться"
+                                checked={messengerMode}
+                                onChange={setMessengerMode}
                             />
-                        </SectionBlock>
 
-                        <SectionBlock title="Приветственный текст">
-                            <textarea
-                                value={welcomeText}
-                                onChange={e => setWelcomeText(e.target.value)}
-                                rows={3}
-                                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm placeholder-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                placeholder="Текст, отображаемый в окне чата до начала диалога"
+                            <ToggleRow
+                                label="Загрузка файлов"
+                                description="Позволить посетителям загружать файлы"
+                                checked={fileUpload}
+                                onChange={setFileUpload}
                             />
-                        </SectionBlock>
 
-                        <SectionBlock title="Оффлайн сообщение">
-                            <textarea
-                                value={offlineMessage}
-                                onChange={e => setOfflineMessage(e.target.value)}
-                                rows={2}
-                                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm placeholder-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                placeholder="Сообщение для посетителей вне рабочих часов"
+                            <ToggleRow
+                                label="Наблюдение за печатью"
+                                description="Позволить операторам видеть ещё не отправленные сообщения посетителей"
+                                checked={typingWatch}
+                                onChange={setTypingWatch}
                             />
-                        </SectionBlock>
 
-                        <ToggleRow
-                            label="Показывать форму обратной связи"
-                            description="Email + сообщение когда операторы оффлайн"
-                            checked={isOfflineForm}
-                            onChange={setIsOfflineForm}
-                        />
+                            <ToggleRow
+                                label="Мобильная кнопка"
+                                description="Показывать кнопку чата на мобильных устройствах"
+                                checked={showMobileButton}
+                                onChange={setShowMobileButton}
+                            />
 
-                        {/* Live preview */}
-                        <SectionBlock title="Предпросмотр">
-                            <div className="flex gap-6">
-                                <WidgetPreview
-                                    type="online"
-                                    color={chatColor}
-                                    coloredHeader={coloredHeader}
-                                    title={onlineTitle}
-                                    text={welcomeText}
-                                />
-                                <WidgetPreview
-                                    type="offline"
-                                    color={chatColor}
-                                    coloredHeader={coloredHeader}
-                                    title={offlineTitle}
-                                    text={welcomeText}
-                                />
-                            </div>
-                        </SectionBlock>
-                    </div>
-                )}
+                            <ToggleRow
+                                label="Звук"
+                                description="Включить звуковые уведомления посетителя"
+                                checked={soundEnabled}
+                                onChange={setSoundEnabled}
+                            />
+                        </div>
+                    )}
 
-                {/* ======== SETTINGS ======== */}
-                {activeSection === 'settings' && (
-                    <div>
-                        <h1 className="text-2xl font-bold text-text-primary mb-1">Настройки</h1>
-                        <p className="text-sm text-text-muted mb-8">Функциональные настройки виджета</p>
+                    {/* ======== HOURS ======== */}
+                    {activeSection === 'hours' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Рабочие часы</h1>
+                            <p className="text-sm text-text-muted mb-8">Настройте расписание онлайн статуса</p>
 
-                        <ToggleRow
-                            label="Режим мессенджера"
-                            description="Включить режим мессенджера, когда операторы не в сети. Если выключен, виджет не будет отображаться"
-                            checked={messengerMode}
-                            onChange={setMessengerMode}
-                        />
+                            <ToggleRow
+                                label="Круглосуточный режим"
+                                description="Виджет будет всегда онлайн, независимо от расписания"
+                                checked={isAlwaysOnline}
+                                onChange={setIsAlwaysOnline}
+                            />
 
-                        <ToggleRow
-                            label="Загрузка файлов"
-                            description="Позволить посетителям загружать файлы"
-                            checked={fileUpload}
-                            onChange={setFileUpload}
-                        />
+                            {!isAlwaysOnline && (
+                                <>
+                                    <SectionBlock title="Часовой пояс">
+                                        <select
+                                            value={timezone}
+                                            onChange={e => setTimezone(e.target.value)}
+                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        >
+                                            <option value="Europe/Moscow">Москва (UTC+3)</option>
+                                            <option value="Europe/Kiev">Киев (UTC+2)</option>
+                                            <option value="Europe/Minsk">Минск (UTC+3)</option>
+                                            <option value="Asia/Almaty">Алмата (UTC+6)</option>
+                                            <option value="Asia/Yekaterinburg">Екатеринбург (UTC+5)</option>
+                                            <option value="Europe/London">Лондон (UTC+0)</option>
+                                            <option value="America/New_York">Нью-Йорк (UTC-5)</option>
+                                        </select>
+                                    </SectionBlock>
 
-                        <ToggleRow
-                            label="Наблюдение за печатью"
-                            description="Позволить операторам видеть ещё не отправленные сообщения посетителей"
-                            checked={typingWatch}
-                            onChange={setTypingWatch}
-                        />
-
-                        <ToggleRow
-                            label="Мобильная кнопка"
-                            description="Показывать кнопку чата на мобильных устройствах"
-                            checked={showMobileButton}
-                            onChange={setShowMobileButton}
-                        />
-
-                        <ToggleRow
-                            label="Звук"
-                            description="Включить звуковые уведомления посетителя"
-                            checked={soundEnabled}
-                            onChange={setSoundEnabled}
-                        />
-                    </div>
-                )}
-
-                {/* ======== HOURS ======== */}
-                {activeSection === 'hours' && (
-                    <div>
-                        <h1 className="text-2xl font-bold text-text-primary mb-1">Рабочие часы</h1>
-                        <p className="text-sm text-text-muted mb-8">Настройте расписание онлайн статуса</p>
-
-                        <ToggleRow
-                            label="Круглосуточный режим"
-                            description="Виджет будет всегда онлайн, независимо от расписания"
-                            checked={isAlwaysOnline}
-                            onChange={setIsAlwaysOnline}
-                        />
-
-                        {!isAlwaysOnline && (
-                            <>
-                                <SectionBlock title="Часовой пояс">
-                                    <select
-                                        value={timezone}
-                                        onChange={e => setTimezone(e.target.value)}
-                                        className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                    >
-                                        <option value="Europe/Moscow">Москва (UTC+3)</option>
-                                        <option value="Europe/Kiev">Киев (UTC+2)</option>
-                                        <option value="Europe/Minsk">Минск (UTC+3)</option>
-                                        <option value="Asia/Almaty">Алмата (UTC+6)</option>
-                                        <option value="Asia/Yekaterinburg">Екатеринбург (UTC+5)</option>
-                                        <option value="Europe/London">Лондон (UTC+0)</option>
-                                        <option value="America/New_York">Нью-Йорк (UTC-5)</option>
-                                    </select>
-                                </SectionBlock>
-
-                                <SectionBlock title="Расписание">
-                                    <div className="space-y-2">
-                                        {hours.map((h) => (
-                                            <div key={h.day} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface-tertiary/50">
-                                                <label className="flex items-center gap-2 cursor-pointer w-32 flex-shrink-0">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={h.enabled}
-                                                        onChange={e => updateHour(h.day, 'enabled', e.target.checked)}
-                                                        className="accent-primary w-4 h-4"
-                                                    />
-                                                    <span className={`text-sm ${h.enabled ? 'text-text-primary' : 'text-text-muted'}`}>
-                                                        {DAY_NAMES[h.day]}
-                                                    </span>
-                                                </label>
-                                                {h.enabled ? (
-                                                    <div className="flex items-center gap-2">
+                                    <SectionBlock title="Расписание">
+                                        <div className="space-y-2">
+                                            {hours.map((h) => (
+                                                <div key={h.day} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface-tertiary/50">
+                                                    <label className="flex items-center gap-2 cursor-pointer w-32 flex-shrink-0">
                                                         <input
-                                                            type="time"
-                                                            value={h.start}
-                                                            onChange={e => updateHour(h.day, 'start', e.target.value)}
-                                                            className="px-2 py-1 rounded bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                                                            type="checkbox"
+                                                            checked={h.enabled}
+                                                            onChange={e => updateHour(h.day, 'enabled', e.target.checked)}
+                                                            className="accent-primary w-4 h-4"
                                                         />
-                                                        <span className="text-text-muted text-sm">—</span>
-                                                        <input
-                                                            type="time"
-                                                            value={h.end}
-                                                            onChange={e => updateHour(h.day, 'end', e.target.value)}
-                                                            className="px-2 py-1 rounded bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-text-muted italic">Выходной</span>
-                                                )}
+                                                        <span className={`text-sm ${h.enabled ? 'text-text-primary' : 'text-text-muted'}`}>
+                                                            {DAY_NAMES[h.day]}
+                                                        </span>
+                                                    </label>
+                                                    {h.enabled ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="time"
+                                                                value={h.start}
+                                                                onChange={e => updateHour(h.day, 'start', e.target.value)}
+                                                                className="px-2 py-1 rounded bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                                                            />
+                                                            <span className="text-text-muted text-sm">—</span>
+                                                            <input
+                                                                type="time"
+                                                                value={h.end}
+                                                                onChange={e => updateHour(h.day, 'end', e.target.value)}
+                                                                className="px-2 py-1 rounded bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-text-muted italic">Выходной</span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </SectionBlock>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ======== SMTP ======== */}
+                    {activeSection === 'smtp' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Email интеграция</h1>
+                            <p className="text-sm text-text-muted mb-8">Настройте SMTP для получения оффлайн сообщений на email</p>
+
+                            <ToggleRow
+                                label="Отправлять уведомления"
+                                description="Присылать сообщения с оффлайн формы на email операторов если никто не онлайн"
+                                checked={emailNotify}
+                                onChange={setEmailNotify}
+                            />
+
+                            <SectionBlock title="Настройки SMTP">
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-text-muted mb-1 block">SMTP Хост</label>
+                                            <input
+                                                value={smtpHost}
+                                                onChange={e => setSmtpHost(e.target.value)}
+                                                placeholder="smtp.yandex.ru"
+                                                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-text-muted mb-1 block">SMTP Порт</label>
+                                            <input
+                                                type="number"
+                                                value={smtpPort}
+                                                onChange={e => setSmtpPort(Number(e.target.value))}
+                                                placeholder="465 или 587"
+                                                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-text-muted mb-1 block">Пользователь (Email)</label>
+                                            <input
+                                                type="email"
+                                                value={smtpUser}
+                                                onChange={e => setSmtpUser(e.target.value)}
+                                                placeholder="user@domain.com"
+                                                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-text-muted mb-1 block">Пароль</label>
+                                            <input
+                                                type="password"
+                                                value={smtpPassword}
+                                                onChange={e => setSmtpPassword(e.target.value)}
+                                                placeholder="P@ssw0rd"
+                                                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-text-muted mb-1 block">От имени (From)</label>
+                                        <input
+                                            value={smtpFrom}
+                                            onChange={e => setSmtpFrom(e.target.value)}
+                                            placeholder="no-reply@domain.com"
+                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        />
+                                    </div>
+                                </div>
+                            </SectionBlock>
+                        </div>
+                    )}
+
+                    {/* ======== WEBHOOKS ======== */}
+                    {activeSection === 'webhooks' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Вебхуки</h1>
+                            <p className="text-sm text-text-muted mb-8">Получайте уведомления о событиях на ваш сервер</p>
+
+                            <ToggleRow
+                                label="Включить вебхуки"
+                                description="Глобальный переключатель работы вебхуков"
+                                checked={webhookEnabled}
+                                onChange={setWebhookEnabled}
+                            />
+
+                            <SectionBlock title="Ваши вебхуки">
+                                {webhooks.length === 0 ? (
+                                    <div className="text-sm text-text-muted mb-4">У вас пока нет вебхуков</div>
+                                ) : (
+                                    <div className="space-y-3 mb-6">
+                                        {webhooks.map(w => (
+                                            <div key={w.id} className="flex flex-col bg-surface-tertiary border border-border rounded-lg p-3 relative">
+                                                <div className="font-mono text-xs text-text-primary break-all pr-8 mb-2">{w.url}</div>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {w.events.map((ev: string) => (
+                                                        <span key={ev} className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] uppercase font-bold">{ev}</span>
+                                                    ))}
+                                                </div>
+                                                <button
+                                                    onClick={async () => {
+                                                        await deleteWebhook(w.id);
+                                                        loadWebhooks(selectedProjectId);
+                                                    }}
+                                                    className="absolute top-3 right-3 text-text-muted hover:text-danger border-none bg-transparent cursor-pointer"
+                                                    title="Удалить"
+                                                >
+                                                    ✕
+                                                </button>
                                             </div>
                                         ))}
                                     </div>
-                                </SectionBlock>
-                            </>
-                        )}
-                    </div>
-                )}
+                                )}
 
-                {/* ======== SMTP ======== */}
-                {activeSection === 'smtp' && (
-                    <div>
-                        <h1 className="text-2xl font-bold text-text-primary mb-1">Email интеграция</h1>
-                        <p className="text-sm text-text-muted mb-8">Настройте SMTP для получения оффлайн сообщений на email</p>
-
-                        <ToggleRow
-                            label="Отправлять уведомления"
-                            description="Присылать сообщения с оффлайн формы на email операторов если никто не онлайн"
-                            checked={emailNotify}
-                            onChange={setEmailNotify}
-                        />
-
-                        <SectionBlock title="Настройки SMTP">
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-text-muted mb-1 block">SMTP Хост</label>
-                                        <input
-                                            value={smtpHost}
-                                            onChange={e => setSmtpHost(e.target.value)}
-                                            placeholder="smtp.yandex.ru"
-                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-text-muted mb-1 block">SMTP Порт</label>
-                                        <input
-                                            type="number"
-                                            value={smtpPort}
-                                            onChange={e => setSmtpPort(Number(e.target.value))}
-                                            placeholder="465 или 587"
-                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-text-muted mb-1 block">Пользователь (Email)</label>
-                                        <input
-                                            type="email"
-                                            value={smtpUser}
-                                            onChange={e => setSmtpUser(e.target.value)}
-                                            placeholder="user@domain.com"
-                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-text-muted mb-1 block">Пароль</label>
-                                        <input
-                                            type="password"
-                                            value={smtpPassword}
-                                            onChange={e => setSmtpPassword(e.target.value)}
-                                            placeholder="P@ssw0rd"
-                                            className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-xs text-text-muted mb-1 block">От имени (From)</label>
+                                <div className="flex gap-2">
                                     <input
-                                        value={smtpFrom}
-                                        onChange={e => setSmtpFrom(e.target.value)}
-                                        placeholder="no-reply@domain.com"
-                                        className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        value={newWebhookUrl}
+                                        onChange={e => setNewWebhookUrl(e.target.value)}
+                                        placeholder="https://yourserver.com/webhook"
+                                        className="flex-1 px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                                     />
+                                    <button
+                                        onClick={async () => {
+                                            if (!newWebhookUrl) return;
+                                            await createWebhook(selectedProjectId, {
+                                                url: newWebhookUrl,
+                                                events: ['new_message', 'new_conversation', 'operator_assigned', 'conversation_closed']
+                                            });
+                                            setNewWebhookUrl('');
+                                            loadWebhooks(selectedProjectId);
+                                        }}
+                                        className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-all"
+                                    >
+                                        Добавить
+                                    </button>
                                 </div>
-                            </div>
-                        </SectionBlock>
-                    </div>
-                )}
+                            </SectionBlock>
+                        </div>
+                    )}
 
-                {/* ======== WEBHOOKS ======== */}
-                {activeSection === 'webhooks' && (
-                    <div>
-                        <h1 className="text-2xl font-bold text-text-primary mb-1">Вебхуки</h1>
-                        <p className="text-sm text-text-muted mb-8">Получайте уведомления о событиях на ваш сервер</p>
+                    {/* ======== TEAM ======== */}
+                    {activeSection === 'team' && (
+                        <div className="max-w-4xl">
+                            {!editingMember ? (
+                                <>
+                                    <h1 className="text-2xl font-bold text-text-primary mb-1">Команда</h1>
+                                    <p className="text-sm text-text-muted mb-8">Управление доступом операторов к проекту</p>
 
-                        <ToggleRow
-                            label="Включить вебхуки"
-                            description="Глобальный переключатель работы вебхуков"
-                            checked={webhookEnabled}
-                            onChange={setWebhookEnabled}
-                        />
-
-                        <SectionBlock title="Ваши вебхуки">
-                            {webhooks.length === 0 ? (
-                                <div className="text-sm text-text-muted mb-4">У вас пока нет вебхуков</div>
-                            ) : (
-                                <div className="space-y-3 mb-6">
-                                    {webhooks.map(w => (
-                                        <div key={w.id} className="flex flex-col bg-surface-tertiary border border-border rounded-lg p-3 relative">
-                                            <div className="font-mono text-xs text-text-primary break-all pr-8 mb-2">{w.url}</div>
-                                            <div className="flex flex-wrap gap-1">
-                                                {w.events.map((ev: string) => (
-                                                    <span key={ev} className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] uppercase font-bold">{ev}</span>
-                                                ))}
+                                    <div className="space-y-4 mb-8">
+                                        {members.map((m) => (
+                                            <div
+                                                key={m.userId}
+                                                onClick={() => setEditingMember(m)}
+                                                className="flex items-center justify-between p-4 bg-surface-tertiary rounded-xl border border-border cursor-pointer hover:border-primary/50 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-full overflow-hidden bg-primary flex items-center justify-center text-white font-bold text-lg">
+                                                        {m.user?.avatarUrl ? (
+                                                            <img src={m.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            m.user?.name?.[0] || 'U'
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-base font-semibold text-text-primary flex items-center gap-2">
+                                                            {m.user.name || 'Без имени'}
+                                                            {m.projectRole === 'OWNER' && <span className="bg-primary/20 text-primary text-[10px] uppercase font-bold px-2 py-0.5 rounded">Владелец</span>}
+                                                            {m.projectRole === 'ADMIN' && <span className="bg-warning/20 text-warning text-[10px] uppercase font-bold px-2 py-0.5 rounded">Админ</span>}
+                                                        </div>
+                                                        <div className="text-sm text-text-muted">{m.user.title || m.user.email}</div>
+                                                    </div>
+                                                </div>
+                                                <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                </svg>
                                             </div>
+                                        ))}
+                                    </div>
+
+                                    <SectionBlock title="Добавить участника">
+                                        <div className="flex gap-2 mb-6">
+                                            <input
+                                                type="email"
+                                                value={newMemberEmail}
+                                                onChange={e => setNewMemberEmail(e.target.value)}
+                                                placeholder="operator@example.com"
+                                                className="flex-1 px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            />
                                             <button
                                                 onClick={async () => {
-                                                    await deleteWebhook(w.id);
-                                                    loadWebhooks(selectedProjectId);
-                                                }}
-                                                className="absolute top-3 right-3 text-text-muted hover:text-danger border-none bg-transparent cursor-pointer"
-                                                title="Удалить"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="flex gap-2">
-                                <input
-                                    value={newWebhookUrl}
-                                    onChange={e => setNewWebhookUrl(e.target.value)}
-                                    placeholder="https://yourserver.com/webhook"
-                                    className="flex-1 px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                />
-                                <button
-                                    onClick={async () => {
-                                        if (!newWebhookUrl) return;
-                                        await createWebhook(selectedProjectId, {
-                                            url: newWebhookUrl,
-                                            events: ['new_message', 'new_conversation', 'operator_assigned', 'conversation_closed']
-                                        });
-                                        setNewWebhookUrl('');
-                                        loadWebhooks(selectedProjectId);
-                                    }}
-                                    className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-all"
-                                >
-                                    Добавить
-                                </button>
-                            </div>
-                        </SectionBlock>
-                    </div>
-                )}
-
-                {/* ======== TEAM ======== */}
-                {activeSection === 'team' && (
-                    <div className="max-w-4xl">
-                        {!editingMember ? (
-                            <>
-                                <h1 className="text-2xl font-bold text-text-primary mb-1">Команда</h1>
-                                <p className="text-sm text-text-muted mb-8">Управление доступом операторов к проекту</p>
-
-                                <div className="space-y-4 mb-8">
-                                    {members.map((m) => (
-                                        <div
-                                            key={m.userId}
-                                            onClick={() => setEditingMember(m)}
-                                            className="flex items-center justify-between p-4 bg-surface-tertiary rounded-xl border border-border cursor-pointer hover:border-primary/50 transition-colors"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-full overflow-hidden bg-primary flex items-center justify-center text-white font-bold text-lg">
-                                                    {m.user?.avatarUrl ? (
-                                                        <img src={m.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        m.user?.name?.[0] || 'U'
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <div className="text-base font-semibold text-text-primary flex items-center gap-2">
-                                                        {m.user.name || 'Без имени'}
-                                                        {m.projectRole === 'OWNER' && <span className="bg-primary/20 text-primary text-[10px] uppercase font-bold px-2 py-0.5 rounded">Владелец</span>}
-                                                        {m.projectRole === 'ADMIN' && <span className="bg-warning/20 text-warning text-[10px] uppercase font-bold px-2 py-0.5 rounded">Админ</span>}
-                                                    </div>
-                                                    <div className="text-sm text-text-muted">{m.user.title || m.user.email}</div>
-                                                </div>
-                                            </div>
-                                            <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                            </svg>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <SectionBlock title="Добавить участника">
-                                    <div className="flex gap-2 mb-6">
-                                        <input
-                                            type="email"
-                                            value={newMemberEmail}
-                                            onChange={e => setNewMemberEmail(e.target.value)}
-                                            placeholder="operator@example.com"
-                                            className="flex-1 px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        />
-                                        <button
-                                            onClick={async () => {
-                                                if (!newMemberEmail) return;
-                                                try {
-                                                    await addProjectMember(selectedProjectId, newMemberEmail, 'OPERATOR');
-                                                    setNewMemberEmail('');
-                                                    loadMembers(selectedProjectId);
-                                                } catch (err: any) {
-                                                    alert(err.response?.data?.error || 'Ошибка при добавлении');
-                                                }
-                                            }}
-                                            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-all"
-                                        >
-                                            Пригласить
-                                        </button>
-                                    </div>
-                                </SectionBlock>
-                            </>
-                        ) : (
-                            <div>
-                                <div className="mb-6 flex items-center gap-4">
-                                    <button
-                                        onClick={() => setEditingMember(null)}
-                                        className="p-2 rounded-lg bg-surface-secondary text-text-muted hover:text-text-primary transition-colors border-none cursor-pointer"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                        </svg>
-                                    </button>
-                                    <div>
-                                        <h1 className="text-2xl font-bold text-text-primary mb-1">Редактирование оператора</h1>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-6">
-                                    <div className="flex flex-col md:flex-row gap-6">
-                                        {/* Avatar Upload */}
-                                        <div className="flex flex-col items-center gap-3 w-48 shrink-0">
-                                            <div className="w-32 h-32 rounded-full overflow-hidden bg-surface-secondary border-2 border-border shadow-lg flex items-center justify-center text-4xl text-white font-bold">
-                                                {editingMember.user?.avatarUrl ? (
-                                                    <img src={editingMember.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    editingMember.user?.name?.[0] || 'U'
-                                                )}
-                                            </div>
-                                            <input
-                                                type="file"
-                                                ref={fileInputRef}
-                                                className="hidden"
-                                                accept="image/*"
-                                                onChange={async (e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (!file) return;
+                                                    if (!newMemberEmail) return;
                                                     try {
-                                                        const { data } = await uploadFile(file);
-                                                        const newAvatarUrl = data.url;
-                                                        await updateProjectMember(selectedProjectId, editingMember.userId, { avatarUrl: newAvatarUrl });
-                                                        setEditingMember({ ...editingMember, user: { ...editingMember.user, avatarUrl: newAvatarUrl } });
+                                                        await addProjectMember(selectedProjectId, newMemberEmail, 'OPERATOR');
+                                                        setNewMemberEmail('');
                                                         loadMembers(selectedProjectId);
-                                                    } catch (err) {
-                                                        console.error('Failed to upload avatar', err);
-                                                        alert('Не удалось загрузить фото');
+                                                    } catch (err: any) {
+                                                        alert(err.response?.data?.error || 'Ошибка при добавлении');
                                                     }
                                                 }}
-                                            />
-                                            <button
-                                                onClick={() => fileInputRef.current?.click()}
-                                                className="text-sm font-medium text-primary hover:text-primary-light transition-colors border-none bg-transparent cursor-pointer"
+                                                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-all"
                                             >
-                                                Загрузить фото
+                                                Пригласить
                                             </button>
                                         </div>
+                                    </SectionBlock>
+                                </>
+                            ) : (
+                                <div>
+                                    <div className="mb-6 flex items-center gap-4">
+                                        <button
+                                            onClick={() => setEditingMember(null)}
+                                            className="p-2 rounded-lg bg-surface-secondary text-text-muted hover:text-text-primary transition-colors border-none cursor-pointer"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                        </button>
+                                        <div>
+                                            <h1 className="text-2xl font-bold text-text-primary mb-1">Редактирование оператора</h1>
+                                        </div>
+                                    </div>
 
-                                        {/* Main Form */}
-                                        <div className="flex-1 space-y-5">
-                                            <div>
-                                                <label className="text-sm font-semibold text-text-primary mb-1 block">Имя</label>
+                                    <div className="space-y-6">
+                                        <div className="flex flex-col md:flex-row gap-6">
+                                            {/* Avatar Upload */}
+                                            <div className="flex flex-col items-center gap-3 w-48 shrink-0">
+                                                <div className="w-32 h-32 rounded-full overflow-hidden bg-surface-secondary border-2 border-border shadow-lg flex items-center justify-center text-4xl text-white font-bold">
+                                                    {editingMember.user?.avatarUrl ? (
+                                                        <img src={editingMember.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        editingMember.user?.name?.[0] || 'U'
+                                                    )}
+                                                </div>
                                                 <input
-                                                    value={editingMember.user.name}
-                                                    onChange={e => setEditingMember({ ...editingMember, user: { ...editingMember.user, name: e.target.value } })}
-                                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-sm font-semibold text-text-primary mb-1 block">Должность</label>
-                                                <input
-                                                    value={editingMember.user.title || ''}
-                                                    onChange={e => setEditingMember({ ...editingMember, user: { ...editingMember.user, title: e.target.value } })}
-                                                    placeholder="Например, Служба поддержки"
-                                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                                />
-                                            </div>
-
-                                            <ToggleRow
-                                                label="Показывать оператора на экране приветствия"
-                                                description="Оператор будет отображаться в списке онлайн-консультантов"
-                                                checked={editingMember.user.showInGreeting}
-                                                onChange={v => setEditingMember({ ...editingMember, user: { ...editingMember.user, showInGreeting: v } })}
-                                            />
-
-                                            <div className="pt-4 border-t border-border">
-                                                <label className="text-sm font-semibold text-text-primary mb-1 block">Адрес электронной почты</label>
-                                                <input
-                                                    value={editingMember.user.email}
-                                                    disabled
-                                                    className="w-full px-3 py-2 rounded-lg bg-surface-secondary text-text-muted text-sm border-none cursor-not-allowed"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="text-sm font-semibold text-text-primary mb-1 block">Роль</label>
-                                                <select
-                                                    value={editingMember.projectRole}
-                                                    onChange={e => setEditingMember({ ...editingMember, projectRole: e.target.value })}
-                                                    className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                                >
-                                                    <option value="OPERATOR">Оператор</option>
-                                                    <option value="ADMIN">Администратор</option>
-                                                    <option value="OWNER">Владелец</option>
-                                                </select>
-                                                <p className="text-xs text-text-muted mt-1">Определите уровень доступа участника к настройкам проекта</p>
-                                            </div>
-
-                                            <div className="flex gap-4 pt-6">
-                                                <button
-                                                    onClick={async () => {
+                                                    type="file"
+                                                    ref={fileInputRef}
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={async (e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
                                                         try {
-                                                            await updateProjectMember(selectedProjectId, editingMember.userId, {
-                                                                name: editingMember.user.name,
-                                                                title: editingMember.user.title,
-                                                                showInGreeting: editingMember.user.showInGreeting,
-                                                                projectRole: editingMember.projectRole
-                                                            });
+                                                            const { data } = await uploadFile(file);
+                                                            const newAvatarUrl = data.url;
+                                                            await updateProjectMember(selectedProjectId, editingMember.userId, { avatarUrl: newAvatarUrl });
+                                                            setEditingMember({ ...editingMember, user: { ...editingMember.user, avatarUrl: newAvatarUrl } });
                                                             loadMembers(selectedProjectId);
-                                                            setEditingMember(null);
                                                         } catch (err) {
-                                                            alert('Не удалось сохранить изменения');
+                                                            console.error('Failed to upload avatar', err);
+                                                            alert('Не удалось загрузить фото');
                                                         }
                                                     }}
-                                                    className="px-6 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-medium transition-colors"
-                                                >
-                                                    Сохранить изменения
-                                                </button>
-
+                                                />
                                                 <button
-                                                    onClick={async () => {
-                                                        if (!confirm('Вы уверены, что хотите удалить этого оператора из проекта?')) return;
-                                                        await removeProjectMember(selectedProjectId, editingMember.userId);
-                                                        loadMembers(selectedProjectId);
-                                                        setEditingMember(null);
-                                                    }}
-                                                    className="px-6 py-2.5 rounded-lg bg-danger/10 hover:bg-danger/20 text-danger font-medium transition-colors border-none cursor-pointer"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="text-sm font-medium text-primary hover:text-primary-light transition-colors border-none bg-transparent cursor-pointer"
                                                 >
-                                                    Удалить
+                                                    Загрузить фото
                                                 </button>
+                                            </div>
+
+                                            {/* Main Form */}
+                                            <div className="flex-1 space-y-5">
+                                                <div>
+                                                    <label className="text-sm font-semibold text-text-primary mb-1 block">Имя</label>
+                                                    <input
+                                                        value={editingMember.user.name}
+                                                        onChange={e => setEditingMember({ ...editingMember, user: { ...editingMember.user, name: e.target.value } })}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-semibold text-text-primary mb-1 block">Должность</label>
+                                                    <input
+                                                        value={editingMember.user.title || ''}
+                                                        onChange={e => setEditingMember({ ...editingMember, user: { ...editingMember.user, title: e.target.value } })}
+                                                        placeholder="Например, Служба поддержки"
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                    />
+                                                </div>
+
+                                                <ToggleRow
+                                                    label="Показывать оператора на экране приветствия"
+                                                    description="Оператор будет отображаться в списке онлайн-консультантов"
+                                                    checked={editingMember.user.showInGreeting}
+                                                    onChange={v => setEditingMember({ ...editingMember, user: { ...editingMember.user, showInGreeting: v } })}
+                                                />
+
+                                                <div className="pt-4 border-t border-border">
+                                                    <label className="text-sm font-semibold text-text-primary mb-1 block">Адрес электронной почты</label>
+                                                    <input
+                                                        value={editingMember.user.email}
+                                                        disabled
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary text-text-muted text-sm border-none cursor-not-allowed"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-sm font-semibold text-text-primary mb-1 block">Роль</label>
+                                                    <select
+                                                        value={editingMember.projectRole}
+                                                        onChange={e => setEditingMember({ ...editingMember, projectRole: e.target.value })}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                    >
+                                                        <option value="OPERATOR">Оператор</option>
+                                                        <option value="ADMIN">Администратор</option>
+                                                        <option value="OWNER">Владелец</option>
+                                                    </select>
+                                                    <p className="text-xs text-text-muted mt-1">Определите уровень доступа участника к настройкам проекта</p>
+                                                </div>
+
+                                                <div className="flex gap-4 pt-6">
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                await updateProjectMember(selectedProjectId, editingMember.userId, {
+                                                                    name: editingMember.user.name,
+                                                                    title: editingMember.user.title,
+                                                                    showInGreeting: editingMember.user.showInGreeting,
+                                                                    projectRole: editingMember.projectRole
+                                                                });
+                                                                loadMembers(selectedProjectId);
+                                                                setEditingMember(null);
+                                                            } catch (err) {
+                                                                alert('Не удалось сохранить изменения');
+                                                            }
+                                                        }}
+                                                        className="px-6 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-medium transition-colors"
+                                                    >
+                                                        Сохранить изменения
+                                                    </button>
+
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!confirm('Вы уверены, что хотите удалить этого оператора из проекта?')) return;
+                                                            await removeProjectMember(selectedProjectId, editingMember.userId);
+                                                            loadMembers(selectedProjectId);
+                                                            setEditingMember(null);
+                                                        }}
+                                                        className="px-6 py-2.5 rounded-lg bg-danger/10 hover:bg-danger/20 text-danger font-medium transition-colors border-none cursor-pointer"
+                                                    >
+                                                        Удалить
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-                    </div>
-                )}
+                            )}
+                        </div>
+                    )}
 
-                {/* ======== INSTALL ======== */}
-                {activeSection === 'install' && (
-                    <div>
-                        <h1 className="text-2xl font-bold text-text-primary mb-1">Установка</h1>
-                        <p className="text-sm text-text-muted mb-8">Код для вставки виджета на ваш сайт</p>
+                    {/* ======== INSTALL ======== */}
+                    {activeSection === 'install' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Установка</h1>
+                            <p className="text-sm text-text-muted mb-8">Код для вставки виджета на ваш сайт</p>
 
-                        <SectionBlock title="Код вставки">
-                            <pre className="p-4 rounded-lg bg-surface-tertiary border border-border text-text-secondary text-xs overflow-x-auto leading-relaxed">
-                                {`<script>
+                            <SectionBlock title="Код вставки">
+                                <pre className="p-4 rounded-lg bg-surface-tertiary border border-border text-text-secondary text-xs overflow-x-auto leading-relaxed">
+                                    {`<script>
   window.LiveChat = { projectId: "${selectedProjectId}" };
 </script>
 <script src="https://YOUR_DOMAIN/widget.js" async></script>`}
-                            </pre>
-                            <p className="text-xs text-text-muted mt-2">Вставьте этот код перед закрывающим тегом <code className="text-primary">&lt;/body&gt;</code> на каждой странице сайта</p>
-                        </SectionBlock>
+                                </pre>
+                                <p className="text-xs text-text-muted mt-2">Вставьте этот код перед закрывающим тегом <code className="text-primary">&lt;/body&gt;</code> на каждой странице сайта</p>
+                            </SectionBlock>
 
-                        <SectionBlock title="Project ID">
-                            <div className="flex items-center gap-2">
-                                <code className="px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-primary text-sm font-mono flex-1">{selectedProjectId}</code>
-                                <button
-                                    onClick={() => navigator.clipboard.writeText(selectedProjectId)}
-                                    className="px-3 py-2 rounded-lg bg-primary/15 text-primary text-sm font-medium hover:bg-primary/25 transition-all border-none cursor-pointer"
-                                >
-                                    Копировать
-                                </button>
-                            </div>
-                        </SectionBlock>
-                    </div>
-                )}
+                            <SectionBlock title="Project ID">
+                                <div className="flex items-center gap-2">
+                                    <code className="px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-primary text-sm font-mono flex-1">{selectedProjectId}</code>
+                                    <button
+                                        onClick={() => navigator.clipboard.writeText(selectedProjectId)}
+                                        className="px-3 py-2 rounded-lg bg-primary/15 text-primary text-sm font-medium hover:bg-primary/25 transition-all border-none cursor-pointer"
+                                    >
+                                        Копировать
+                                    </button>
+                                </div>
+                            </SectionBlock>
+                        </div>
+                    )}
+                </div>
+            </div>
+            {showCreateModal && (
+                <CreateProjectModal
+                    onClose={() => setShowCreateModal(false)}
+                    onCreated={loadProjects}
+                />
+            )}
+        </>
+    );
+}
+
+function CreateProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+    const [name, setName] = useState('');
+    const [creating, setCreating] = useState(false);
+
+    const handleCreate = async () => {
+        if (!name.trim()) return;
+        setCreating(true);
+        try {
+            await createProject(name.trim());
+            onCreated();
+            onClose();
+        } catch (err) {
+            console.error('Failed to create project:', err);
+        } finally {
+            setCreating(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+            <div
+                className="bg-surface rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 border border-border"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-text-primary">Новый проект</h2>
+                    <button
+                        onClick={onClose}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-secondary transition-colors border-none bg-transparent cursor-pointer text-xl"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <p className="text-sm text-text-muted mb-6">
+                    Проект — это сайт или приложение, на котором будет установлен виджет чата
+                </p>
+                <input
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                    placeholder="Название проекта (например: Мой сайт)"
+                    className="w-full px-4 py-3 rounded-xl bg-surface-secondary border border-border text-text-primary placeholder-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all mb-4"
+                    autoFocus
+                />
+                <div className="flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 py-2.5 rounded-xl border border-border text-text-secondary hover:bg-surface-secondary transition-colors text-sm font-medium cursor-pointer bg-transparent"
+                    >
+                        Отмена
+                    </button>
+                    <button
+                        onClick={handleCreate}
+                        disabled={!name.trim() || creating}
+                        className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all disabled:opacity-40 border-none cursor-pointer"
+                    >
+                        {creating ? 'Создание...' : 'Создать'}
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -31,6 +31,7 @@ export class LiveChatWidget {
     private isOnline = true;
     private unreadCount = 0;
     private messages: MessageData[] = [];
+    private onlineOperators: any[] = [];
 
     private onlineTitle = 'Напишите нам, мы онлайн!';
     private offlineTitle = 'Сейчас мы оффлайн';
@@ -86,7 +87,7 @@ export class LiveChatWidget {
             this.messages = history;
             this.renderMessages();
 
-            this.chatSocket.connect(this.conversationId);
+            this.chatSocket.connect(this.conversationId, this.visitorId ?? undefined);
             this.chatSocket.onMessage((msg) => {
                 if (this.messages.find(m => m.id === msg.id)) return;
 
@@ -185,6 +186,28 @@ export class LiveChatWidget {
         this.toggleBtn.appendChild(this.badgeEl);
     }
 
+    private buildOperatorsHtml(operators: any[]): string {
+        let html = '<div class="livechat-operators-section" style="display:flex; flex-direction:column; align-items:center; padding:24px 16px 8px;">';
+        html += '<div style="display:flex; justify-content:center; gap:24px; margin-bottom:16px;">';
+        operators.forEach(op => {
+            html += '<div style="display:flex; flex-direction:column; align-items:center; gap:4px;">';
+            html += '<div style="position:relative;">';
+            if (op.avatarUrl) {
+                html += `<img src="${this.escapeHtml(op.avatarUrl)}" alt="${this.escapeHtml(op.name)}" style="width:64px; height:64px; border-radius:50%; object-fit:cover; border:2px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,0.08);" />`;
+            } else {
+                const initial = op.name ? op.name.charAt(0).toUpperCase() : 'O';
+                html += `<div style="width:64px; height:64px; border-radius:50%; background:var(--primary-color, #6366f1); display:flex; align-items:center; justify-content:center; color:#fff; font-size:24px; font-weight:600; border:2px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,0.08);">${initial}</div>`;
+            }
+            html += '<div style="position:absolute; bottom:2px; right:2px; width:14px; height:14px; background:#22c55e; border-radius:50%; border:2px solid #fff;"></div>';
+            html += '</div>';
+            html += `<span style="font-size:13px; color:#1e293b; font-weight:500; max-width:80px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.escapeHtml(op.name)}</span>`;
+            html += '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+        return html;
+    }
+
     private updateOnlineUI(offlineMessage?: string, onlineOperators?: any[]) {
         if (this.isOnline) {
             this.headerTitleEl.textContent = this.onlineTitle;
@@ -194,30 +217,17 @@ export class LiveChatWidget {
             const offlineForm = this.windowEl.querySelector('.livechat-offline-form');
             if (offlineForm) offlineForm.remove();
 
-            // Render online operators
-            const welcomeTextEl = this.windowEl.querySelector('.livechat-welcome-text');
-            if (welcomeTextEl && onlineOperators && onlineOperators.length > 0) {
-                let avatarsHtml = '<div class="livechat-operators-avatars" style="display:flex; justify-content:center; gap:12px; margin-bottom:12px;">';
-                onlineOperators.forEach(op => {
-                    const avatarUrl = op.avatarUrl;
-                    if (avatarUrl) {
-                        avatarsHtml += `
-                          <div style="position:relative;">
-                              <img src="${this.escapeHtml(avatarUrl)}" alt="Avatar" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid #fff; box-shadow:0 2px 4px rgba(0,0,0,0.1);" />
-                              <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; background:#22c55e; border-radius:50%; border:2px solid #fff;"></div>
-                          </div>`;
-                    } else {
-                        const initial = op.name ? op.name.charAt(0).toUpperCase() : 'O';
-                        avatarsHtml += `
-                          <div style="position:relative;">
-                              <div style="width:40px; height:40px; border-radius:50%; background:var(--primary-color, #6366f1); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; border:2px solid #fff; box-shadow:0 2px 4px rgba(0,0,0,0.1);">${initial}</div>
-                              <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; background:#22c55e; border-radius:50%; border:2px solid #fff;"></div>
-                          </div>`;
-                    }
-                });
-                avatarsHtml += '</div>';
+            // Store operators for renderMessages usage
+            if (onlineOperators && onlineOperators.length > 0) {
+                this.onlineOperators = onlineOperators;
+            }
 
-                welcomeTextEl.innerHTML = avatarsHtml + '<div style="font-weight: 500; font-size: 13px; color: #1e293b; margin-bottom: 4px;">Мы онлайн</div>' + welcomeTextEl.innerHTML;
+            // Render online operators in welcome screen
+            const welcomeEl = this.windowEl.querySelector('.livechat-welcome');
+            if (welcomeEl && this.onlineOperators.length > 0) {
+                const operatorsHtml = this.buildOperatorsHtml(this.onlineOperators);
+                const formattedWelcome = this.welcomeText.replace(/\\n/g, '<br/>');
+                welcomeEl.innerHTML = operatorsHtml + `<div class="livechat-welcome-text">${formattedWelcome}</div>`;
             }
 
         } else {
@@ -523,8 +533,13 @@ export class LiveChatWidget {
     private renderMessages() {
         if (this.messages.length === 0) {
             const formattedWelcome = this.welcomeText.replace(/\\n/g, '<br/>');
+            let operatorsHtml = '';
+            if (this.onlineOperators.length > 0) {
+                operatorsHtml = this.buildOperatorsHtml(this.onlineOperators);
+            }
             this.messagesEl.innerHTML = `
                 <div class="livechat-welcome">
+                    ${operatorsHtml}
                     <div class="livechat-welcome-text">
                         ${formattedWelcome}
                     </div>

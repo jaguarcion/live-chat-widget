@@ -79,6 +79,24 @@ export const updateProjectSettings = async (req: AuthRequest, res: Response): Pr
     }
 };
 
+// Helper to fetch online operators for a project
+async function getOnlineOperators(projectId: string) {
+    const presences = await prisma.operatorPresence.findMany({
+        where: { projectId, isOnline: true },
+        include: {
+            user: { select: { id: true, name: true, avatarUrl: true, title: true, showInGreeting: true } }
+        }
+    });
+
+    return presences
+        .filter(p => p.user.showInGreeting)
+        .map(p => ({
+            name: p.user.name,
+            avatarUrl: p.user.avatarUrl,
+            title: p.user.title
+        }));
+}
+
 // Check if project is currently online (for widget)
 export const checkOnlineStatus = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -89,12 +107,14 @@ export const checkOnlineStatus = async (req: AuthRequest, res: Response): Promis
         });
 
         if (!settings) {
-            res.json({ online: true }); // Default to online if no settings
+            const onlineOperators = await getOnlineOperators(projectId);
+            res.json({ online: true, onlineOperators }); // Default to online if no settings
             return;
         }
 
         if (settings.isAlwaysOnline) {
-            res.json({ online: true });
+            const onlineOperators = await getOnlineOperators(projectId);
+            res.json({ online: true, onlineOperators });
             return;
         }
 
@@ -106,7 +126,8 @@ export const checkOnlineStatus = async (req: AuthRequest, res: Response): Promis
         }>;
 
         if (businessHours.length === 0) {
-            res.json({ online: true }); // No hours set = always online
+            const onlineOperators = await getOnlineOperators(projectId);
+            res.json({ online: true, onlineOperators }); // No hours set = always online
             return;
         }
 
@@ -136,9 +157,6 @@ export const checkOnlineStatus = async (req: AuthRequest, res: Response): Promis
 
         const online = currentTime >= todayHours.start && currentTime <= todayHours.end;
 
-        // EVEN IF in business hours, if there's no operator connected and we want "real" status
-        // WE COULD check if anyone is in the project room.
-        // For now, let's just stick to hours, but add a flag if actual operators are present.
         const io = (global as any).io;
         let hasActiveOperators = false;
         if (io) {
@@ -146,14 +164,13 @@ export const checkOnlineStatus = async (req: AuthRequest, res: Response): Promis
             hasActiveOperators = room ? room.size > 0 : false;
         }
 
-        // Project is online if:
-        // 1. isAlwaysOnline is true
-        // 2. OR it's within business hours AND at least one operator is connected (optional refinement)
-        // Let's stick to simple logic for now: online if within hours OR always online.
+        // Fetch online operators only when project is online
+        const onlineOperators = online ? await getOnlineOperators(projectId) : undefined;
 
         res.json({
             online,
             hasActiveOperators,
+            onlineOperators,
             offlineMessage: online ? undefined : settings.offlineMessage,
             isOfflineForm: online ? undefined : settings.isOfflineForm
         });

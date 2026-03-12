@@ -20,10 +20,10 @@ export class ChatSocket {
         });
     }
 
-    connect(conversationId: string) {
+    connect(conversationId: string, visitorId?: string) {
         this.socket.connect();
         this.socket.on('connect', () => {
-            this.socket.emit('visitor_connect', { conversationId });
+            this.socket.emit('visitor_connect', { conversationId, visitorId });
         });
     }
 

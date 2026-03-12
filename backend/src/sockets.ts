@@ -13,12 +13,14 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
         console.log('Client connected:', socket.id);
 
         // Operator Authentication
-        socket.on('operator_connect', async (data: { token: string; projectIds?: string[] }) => {
+        socket.on('operator_connect', async (data: { token: string; projectIds?: string[]; status?: string }) => {
             try {
                 const payload = jwt.verify(data.token, JWT_SECRET) as { userId: string; role: string };
                 socket.data.userId = payload.userId;
                 socket.data.role = payload.role;
                 socket.join(`operator_${payload.userId}`);
+
+                const isOnline = data.status ? data.status === 'online' : true;
 
                 // Join rooms for all projects the operator belongs to
                 if (data.projectIds && Array.isArray(data.projectIds)) {
@@ -33,11 +35,11 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                                 userId: payload.userId,
                                 projectId,
                                 socketId: socket.id,
-                                isOnline: true,
+                                isOnline,
                             },
                             update: {
                                 socketId: socket.id,
-                                isOnline: true,
+                                isOnline,
                                 lastSeenAt: new Date(),
                             }
                         });
@@ -50,17 +52,37 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                     socket.join('operators');
                 }
 
-                console.log(`Operator ${payload.userId} connected`);
+                console.log(`Operator ${payload.userId} connected (status: ${data.status || 'online'})`);
             } catch (e) {
                 socket.emit('error', 'Authentication failed');
             }
         });
 
         // Visitor Connection
-        socket.on('visitor_connect', (data: { conversationId: string }) => {
+        socket.on('visitor_connect', async (data: { conversationId: string; visitorId?: string }) => {
             socket.data.conversationId = data.conversationId;
+            socket.data.visitorId = data.visitorId;
             socket.join(`conversation_${data.conversationId}`);
             console.log(`Visitor connected to conversation ${data.conversationId}`);
+
+            // Notify operators that this visitor is online
+            try {
+                const conversation = await prisma.conversation.findUnique({
+                    where: { id: data.conversationId },
+                    select: { projectId: true, visitorId: true }
+                });
+                if (conversation) {
+                    socket.data.projectId = conversation.projectId;
+                    const visitorId = data.visitorId || conversation.visitorId;
+                    socket.data.visitorId = visitorId;
+                    io.to(`project_${conversation.projectId}`).emit('visitor_online', {
+                        conversationId: data.conversationId,
+                        visitorId,
+                    });
+                }
+            } catch (e) {
+                console.error('visitor_connect lookup error:', e);
+            }
         });
 
         // Visitor sends a message
@@ -219,8 +241,42 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
             });
         });
 
+        // Operator status change (online/offline/invisible)
+        socket.on('operator_status_change', async (data: { status: 'online' | 'offline' | 'invisible' }) => {
+            if (!socket.data.userId || !socket.data.projectIds) return;
+
+            const isOnline = data.status === 'online';
+
+            for (const projectId of socket.data.projectIds) {
+                try {
+                    await prisma.operatorPresence.updateMany({
+                        where: {
+                            userId: socket.data.userId,
+                            projectId,
+                        },
+                        data: {
+                            isOnline,
+                            lastSeenAt: new Date(),
+                        }
+                    });
+                } catch (error) {
+                    console.error('Status change error:', error);
+                }
+            }
+
+            console.log(`Operator ${socket.data.userId} status changed to ${data.status}`);
+        });
+
         socket.on('disconnect', async () => {
             console.log('Client disconnected:', socket.id);
+
+            // Notify operators that visitor went offline
+            if (!socket.data.userId && socket.data.conversationId && socket.data.projectId) {
+                io.to(`project_${socket.data.projectId}`).emit('visitor_offline', {
+                    conversationId: socket.data.conversationId,
+                    visitorId: socket.data.visitorId,
+                });
+            }
 
             // Update operator presence on disconnect
             if (socket.data.userId && socket.data.projectIds) {
