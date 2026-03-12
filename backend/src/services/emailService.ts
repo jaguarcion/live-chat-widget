@@ -66,3 +66,54 @@ export const sendOfflineNotification = async (
         console.error('Email notification error:', error);
     }
 };
+
+export const sendVisitorOfflineNotification = async (
+    projectId: string,
+    visitorEmail: string,
+    messageText: string
+): Promise<void> => {
+    try {
+        const settings = await prisma.projectSettings.findUnique({
+            where: { projectId },
+            include: { project: { select: { name: true } } }
+        });
+
+        if (!settings || !settings.emailNotify) return; // Note: You might want a separate toggle for visitor emails, reusing emailNotify for now
+        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPassword) {
+            return;
+        }
+
+        const transporter = nodemailer.createTransport({
+            host: settings.smtpHost,
+            port: settings.smtpPort || 587,
+            secure: (settings.smtpPort || 587) === 465,
+            auth: {
+                user: settings.smtpUser,
+                pass: settings.smtpPassword,
+            },
+        });
+
+        const projectName = (settings as any).project?.name || 'LiveChat';
+        const fromAddress = settings.smtpFrom || settings.smtpUser;
+
+        await transporter.sendMail({
+            from: `"${projectName}" <${fromAddress}>`,
+            to: visitorEmail,
+            subject: `Новое сообщение от поддержки — ${projectName}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: ${settings.chatColor || '#6366f1'};">Новое сообщение от оператора</h2>
+                    <p>Здравствуйте!</p>
+                    <p>Оператор проекта <strong>${projectName}</strong> ответил на ваш вопрос:</p>
+                    <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+                        <p style="margin: 0; white-space: pre-wrap;">${messageText}</p>
+                    </div>
+                </div>
+            `,
+        });
+
+        console.log(`Visitor offline notification sent for project ${projectId} to ${visitorEmail}`);
+    } catch (error) {
+        console.error('Visitor email notification error:', error);
+    }
+};

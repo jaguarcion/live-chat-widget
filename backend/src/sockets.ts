@@ -3,7 +3,7 @@ import { prisma } from './db';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import jwt from 'jsonwebtoken';
 import { logEvent } from './services/eventLogger';
-import { sendOfflineNotification } from './services/emailService';
+import { sendOfflineNotification, sendVisitorOfflineNotification } from './services/emailService';
 import { triggerWebhook } from './services/webhookService';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
@@ -159,7 +159,7 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
 
                 const conversation = await prisma.conversation.findUnique({
                     where: { id: data.conversationId },
-                    select: { projectId: true }
+                    include: { visitor: true }
                 });
 
                 const message = await prisma.message.create({
@@ -191,6 +191,23 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                         message,
                         conversationId: data.conversationId,
                     });
+
+                    // Check if visitor is online — if not, send offline email notification
+                    let isVisitorOnline = false;
+                    const room = io.sockets.adapter.rooms.get(`conversation_${data.conversationId}`);
+                    if (room) {
+                        for (const socketId of room) {
+                            const s = io.sockets.sockets.get(socketId);
+                            if (s && s.data?.visitorId) {
+                                isVisitorOnline = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!isVisitorOnline && conversation.visitor?.email) {
+                        sendVisitorOfflineNotification(conversation.projectId, conversation.visitor.email as string, message.text);
+                    }
                 } else {
                     io.to('operators').emit('new_message', message);
                 }

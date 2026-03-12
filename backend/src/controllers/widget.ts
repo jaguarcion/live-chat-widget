@@ -207,3 +207,59 @@ export const sendWidgetMessage = async (req: Request, res: Response): Promise<vo
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+export const updateVisitorContact = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { visitorId, name, email, phone, customFields } = req.body;
+
+        if (!visitorId) {
+            res.status(400).json({ error: 'visitorId is required' });
+            return;
+        }
+
+        const visitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
+        if (!visitor) {
+            res.status(404).json({ error: 'Visitor not found' });
+            return;
+        }
+
+        let newNotes = visitor.notes ? visitor.notes.trim() : '';
+        if (phone && !newNotes.includes(phone)) {
+            newNotes += `\nТелефон: ${phone}`;
+        }
+        if (customFields && typeof customFields === 'object') {
+            for (const [key, value] of Object.entries(customFields)) {
+                if (!newNotes.includes(value as string)) {
+                    newNotes += `\n${key}: ${value}`;
+                }
+            }
+        }
+
+        const updated = await prisma.visitor.update({
+            where: { id: visitorId },
+            data: {
+                name: name || visitor.name,
+                email: email || visitor.email,
+                notes: newNotes.trim() || null
+            }
+        });
+
+        // Notify operators
+        try {
+            const io = getIO();
+            const conversation = await prisma.conversation.findFirst({
+                where: { visitorId, status: 'OPEN' }
+            });
+            if (conversation?.projectId) {
+                io.to(`project_${conversation.projectId}`).emit('visitor_updated', updated);
+            }
+        } catch (e) {
+            console.error('Socket emit error:', e);
+        }
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Update visitor contact error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

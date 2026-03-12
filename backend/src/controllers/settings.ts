@@ -17,16 +17,18 @@ export const getProjectSettings = async (req: AuthRequest, res: Response): Promi
                 data: {
                     projectId,
                     businessHours: '[]',
+                    prechatFields: '[{"id":"name","label":"Ваше имя","type":"text","required":false,"enabled":true},{"id":"email","label":"E-mail","type":"email","required":true,"enabled":true},{"id":"phone","label":"Телефон","type":"text","required":false,"enabled":false}]',
                     offlineMessage: 'Оставьте сообщение, мы ответим как можно скорее',
                     welcomeText: 'Мы онлайн ежедневно без выходных.\nОставьте сообщение — мы ответим на почту или здесь.'
                 }
             });
         }
 
-        // Parse businessHours JSON
+        // Parse JSON fields
         res.json({
             ...settings,
-            businessHours: JSON.parse(settings.businessHours)
+            businessHours: JSON.parse(settings.businessHours),
+            prechatFields: JSON.parse(settings.prechatFields || '[]')
         });
     } catch (error) {
         console.error('Get settings error:', error);
@@ -48,6 +50,7 @@ export const updateProjectSettings = async (req: AuthRequest, res: Response): Pr
         if (body.isAlwaysOnline !== undefined) data.isAlwaysOnline = body.isAlwaysOnline;
         if (body.offlineMessage !== undefined) data.offlineMessage = body.offlineMessage;
         if (body.isOfflineForm !== undefined) data.isOfflineForm = body.isOfflineForm;
+        if (body.prechatFields !== undefined) data.prechatFields = JSON.stringify(body.prechatFields);
 
         // Appearance
         if (body.chatColor !== undefined) data.chatColor = body.chatColor;
@@ -70,13 +73,21 @@ export const updateProjectSettings = async (req: AuthRequest, res: Response): Pr
 
         const settings = await prisma.projectSettings.upsert({
             where: { projectId },
-            create: { projectId, ...data },
+            create: {
+                projectId,
+                ...data,
+                businessHours: data.businessHours ?? '[]',
+                prechatFields: data.prechatFields ?? '[{"id":"name","label":"Ваше имя","type":"text","required":false,"enabled":true},{"id":"email","label":"E-mail","type":"email","required":true,"enabled":true},{"id":"phone","label":"Телефон","type":"text","required":false,"enabled":false}]',
+                offlineMessage: data.offlineMessage ?? 'Оставьте сообщение, мы ответим как можно скорее',
+                welcomeText: data.welcomeText ?? 'Мы онлайн ежедневно без выходных.\\nОставьте сообщение — мы ответим на почту или здесь.'
+            },
             update: data
         });
 
         res.json({
             ...settings,
-            businessHours: JSON.parse(settings.businessHours)
+            businessHours: JSON.parse(settings.businessHours),
+            prechatFields: JSON.parse(settings.prechatFields || '[]')
         });
     } catch (error) {
         console.error('Update settings error:', error);

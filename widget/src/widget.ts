@@ -32,6 +32,8 @@ export class LiveChatWidget {
     private unreadCount = 0;
     private messages: MessageData[] = [];
     private onlineOperators: any[] = [];
+    private prechatFields: any[] = [];
+    private leadCaptured = false;
 
     private onlineTitle = 'Напишите нам, мы онлайн!';
     private offlineTitle = 'Сейчас мы оффлайн';
@@ -59,6 +61,7 @@ export class LiveChatWidget {
 
     private async init() {
         this.visitorId = localStorage.getItem('livechat_visitor_id');
+        this.leadCaptured = localStorage.getItem(`livechat_lead_captured_${this.projectId}`) === 'true';
 
         try {
             const status = await checkOnline(this.projectId);
@@ -79,6 +82,9 @@ export class LiveChatWidget {
 
             if (data.settings) {
                 this.applySettings(data.settings);
+                if (data.settings.prechatFields) {
+                    this.prechatFields = data.settings.prechatFields.filter((f: any) => f.enabled);
+                }
             }
 
             this.updateOnlineUI(status.offlineMessage, status.onlineOperators);
@@ -531,6 +537,8 @@ export class LiveChatWidget {
     }
 
     private renderMessages() {
+        let hasVisitorMessage = false;
+
         if (this.messages.length === 0) {
             const formattedWelcome = this.welcomeText.replace(/\\n/g, '<br/>');
             let operatorsHtml = '';
@@ -550,6 +558,7 @@ export class LiveChatWidget {
         this.messagesEl.innerHTML = '';
         this.messages.forEach(msg => {
             const isJoin = msg.type === 'OPERATOR_JOIN';
+            if (msg.sender === 'VISITOR') hasVisitorMessage = true;
 
             if (isJoin) {
                 const eventEl = document.createElement('div');
@@ -641,6 +650,103 @@ export class LiveChatWidget {
             wrapper.appendChild(msgEl);
             this.messagesEl.appendChild(wrapper);
         });
+
+        if (hasVisitorMessage && !this.leadCaptured && this.prechatFields.length > 0) {
+            this.appendLeadForm();
+        }
+    }
+
+    private appendLeadForm() {
+        if (this.messagesEl.querySelector('.livechat-lead-form')) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'livechat-lead-form-wrapper';
+        wrapper.style.display = 'flex';
+        wrapper.style.justifyContent = 'center';
+        wrapper.style.marginTop = '12px';
+        wrapper.style.marginBottom = '12px';
+        wrapper.style.width = '100%';
+
+        const formEl = document.createElement('div');
+        formEl.className = 'livechat-lead-form';
+        formEl.style.background = '#f8fafc';
+        formEl.style.border = '1px solid #e2e8f0';
+        formEl.style.borderRadius = '12px';
+        formEl.style.padding = '16px';
+        formEl.style.width = '240px';
+        formEl.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
+
+        let html = '<div style="font-weight:600; font-size:13px; color:#0f172a; margin-bottom:12px; text-align:center;">Пожалуйста, представьтесь</div>';
+
+        this.prechatFields.forEach(f => {
+            html += `<div style="margin-bottom:10px;">
+                <label style="display:block; font-size:11px; color:#475569; margin-bottom:4px;">${this.escapeHtml(f.label)} ${f.required ? '<span style="color:#ef4444">*</span>' : ''}</label>
+                <input class="livechat-lead-input" data-id="${f.id}" data-required="${f.required}" type="${f.type}" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; outline:none;" />
+            </div>`;
+        });
+        html += `<button class="livechat-lead-submit" style="width:100%; padding:8px; border:none; border-radius:6px; background:var(--primary-color, #6366f1); color:white; font-size:13px; font-weight:500; cursor:pointer; margin-top:4px; transition: opacity 0.2s;">Отправить</button>`;
+
+        formEl.innerHTML = html;
+
+        const submitBtn = formEl.querySelector('.livechat-lead-submit') as HTMLButtonElement;
+        submitBtn.onclick = async () => {
+            const inputs = formEl.querySelectorAll('.livechat-lead-input') as NodeListOf<HTMLInputElement>;
+            const data: any = {};
+            let valid = true;
+            inputs.forEach(input => {
+                const id = input.getAttribute('data-id')!;
+                const req = input.getAttribute('data-required') === 'true';
+                const val = input.value.trim();
+                if (req && !val) {
+                    input.style.borderColor = '#ef4444';
+                    valid = false;
+                } else {
+                    input.style.borderColor = '#cbd5e1';
+                }
+                if (val) data[id] = val;
+            });
+
+            if (!valid) return;
+
+            submitBtn.textContent = 'Отправка...';
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.7';
+
+            try {
+                const customFields: any = {};
+                for (const key of Object.keys(data)) {
+                    if (key !== 'name' && key !== 'email' && key !== 'phone') {
+                        customFields[key] = data[key];
+                    }
+                }
+
+                const API_BASE = (window as any).__LIVECHAT_API__ || 'http://localhost:4001/api';
+                await fetch(`${API_BASE}/widget/visitor`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        visitorId: this.visitorId,
+                        name: data.name,
+                        email: data.email,
+                        phone: data.phone,
+                        customFields
+                    })
+                });
+
+                this.leadCaptured = true;
+                localStorage.setItem(`livechat_lead_captured_${this.projectId}`, 'true');
+                wrapper.remove();
+            } catch (err) {
+                console.error('Lead form error', err);
+                submitBtn.textContent = 'Ошибка, попробуйте снова';
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+            }
+        };
+
+        wrapper.appendChild(formEl);
+        this.messagesEl.appendChild(wrapper);
+        this.scrollToBottom();
     }
 
     private scrollToBottom() {

@@ -20,7 +20,7 @@ const COLOR_PALETTE = [
     '#1e293b', '#334155', '#475569', '#64748b', '#78716c', '#92400e',
 ];
 
-type SettingsSection = 'appearance' | 'texts' | 'settings' | 'hours' | 'smtp' | 'webhooks' | 'members' | 'install' | 'team';
+type SettingsSection = 'appearance' | 'texts' | 'settings' | 'hours' | 'smtp' | 'webhooks' | 'members' | 'install' | 'team' | 'prechat';
 
 export default function SettingsPage({ initialSection = 'appearance' }: { initialSection?: SettingsSection }) {
     const [projects, setProjects] = useState<any[]>([]);
@@ -46,6 +46,13 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
     const [smtpFrom, setSmtpFrom] = useState('');
     const [emailNotify, setEmailNotify] = useState(false);
     const [webhookEnabled, setWebhookEnabled] = useState(false);
+
+    // Pre-chat Form
+    const [prechatFields, setPrechatFields] = useState<{ id: string; label: string; type: string; required: boolean; enabled: boolean; }[]>([
+        { id: 'name', label: 'Ваше имя', type: 'text', required: false, enabled: true },
+        { id: 'email', label: 'E-mail', type: 'email', required: true, enabled: true },
+        { id: 'phone', label: 'Телефон', type: 'text', required: false, enabled: false }
+    ]);
 
     // Webhooks & Members Data
     const [webhooks, setWebhooks] = useState<any[]>([]);
@@ -125,6 +132,16 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
             setSmtpFrom(data.smtpFrom || '');
             setEmailNotify(data.emailNotify || false);
             setWebhookEnabled(data.webhookEnabled || false);
+
+            if (data.prechatFields && Array.isArray(data.prechatFields)) {
+                setPrechatFields(data.prechatFields);
+            } else {
+                setPrechatFields([
+                    { id: 'name', label: 'Ваше имя', type: 'text', required: false, enabled: true },
+                    { id: 'email', label: 'E-mail', type: 'email', required: true, enabled: true },
+                    { id: 'phone', label: 'Телефон', type: 'text', required: false, enabled: false }
+                ]);
+            }
         } catch (err) {
             console.error('Failed to load settings:', err);
         }
@@ -152,7 +169,8 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                 chatColor, buttonPosition, buttonStyle, coloredHeader,
                 onlineTitle, offlineTitle, welcomeText,
                 soundEnabled, showMobileButton, showLogo, fileUpload, messengerMode, typingWatch,
-                smtpHost, smtpPort, smtpUser, smtpPassword, smtpFrom, emailNotify, webhookEnabled
+                smtpHost, smtpPort, smtpUser, smtpPassword, smtpFrom, emailNotify, webhookEnabled,
+                prechatFields
             };
             // Send businessHours even if not configured if we are in schedule mode
             if (!isAlwaysOnline) {
@@ -175,6 +193,7 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
     const navItems: { key: SettingsSection; label: string; icon: string }[] = [
         { key: 'appearance', label: 'Внешний вид', icon: '🎨' },
         { key: 'texts', label: 'Тексты окна чата', icon: '💬' },
+        { key: 'prechat', label: 'Сбор контактов', icon: '📝' },
         { key: 'settings', label: 'Настройки', icon: '⚙️' },
         { key: 'hours', label: 'Рабочие часы', icon: '🕐' },
         { key: 'smtp', label: 'Email интеграция', icon: '📧' },
@@ -345,6 +364,56 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                                     />
                                 </div>
                             </SectionBlock>
+                        </div>
+                    )}
+
+                    {/* ======== PRECHAT ======== */}
+                    {activeSection === 'prechat' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Сбор контактов</h1>
+                            <p className="text-sm text-text-muted mb-8">Настройте поля формы, которая будет показана посетителю после первого сообщения.</p>
+
+                            <div className="space-y-4">
+                                {prechatFields.map((field, idx) => (
+                                    <div key={field.id} className="p-5 border border-border rounded-xl bg-surface-tertiary flex items-center justify-between">
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="font-semibold text-text-primary">{field.label} <span className="text-text-muted font-normal text-xs ml-2">({field.id})</span></span>
+                                            <span className="text-xs text-text-secondary bg-surface-secondary px-2 py-0.5 rounded-md inline-flex w-fit border border-border">
+                                                Тип: {field.type === 'email' ? 'E-mail' : field.type === 'phone' ? 'Телефон' : 'Текст'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-6">
+                                            <label className="flex items-center gap-2.5 text-sm font-medium text-text-primary cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={field.required}
+                                                    onChange={e => {
+                                                        const newFields = [...prechatFields];
+                                                        newFields[idx].required = e.target.checked;
+                                                        setPrechatFields(newFields);
+                                                    }}
+                                                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50 focus:ring-offset-surface-tertiary"
+                                                />
+                                                Обязательное
+                                            </label>
+
+                                            <label className="flex items-center gap-2.5 text-sm font-medium text-text-primary cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={field.enabled}
+                                                    onChange={e => {
+                                                        const newFields = [...prechatFields];
+                                                        newFields[idx].enabled = e.target.checked;
+                                                        setPrechatFields(newFields);
+                                                    }}
+                                                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50 focus:ring-offset-surface-tertiary"
+                                                />
+                                                Включено
+                                            </label>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
