@@ -14,7 +14,12 @@ export const getProjectSettings = async (req: AuthRequest, res: Response): Promi
         // Create defaults if not exist
         if (!settings) {
             settings = await prisma.projectSettings.create({
-                data: { projectId }
+                data: {
+                    projectId,
+                    businessHours: '[]',
+                    offlineMessage: 'Оставьте сообщение, мы ответим как можно скорее',
+                    welcomeText: 'Мы онлайн ежедневно без выходных.\nОставьте сообщение — мы ответим на почту или здесь.'
+                }
             });
         }
 

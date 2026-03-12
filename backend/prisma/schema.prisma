@@ -109,9 +109,9 @@ model ProjectSettings {
   id               String   @id @default(uuid())
   projectId        String   @unique
   timezone         String   @default("Europe/Moscow")
-  businessHours    String   @default("[]") @db.Text
+  businessHours    String   @db.Text
   isAlwaysOnline   Boolean  @default(true)
-  offlineMessage   String   @default("Оставьте сообщение, мы ответим как можно скорее") @db.Text
+  offlineMessage   String   @db.Text
   isOfflineForm    Boolean  @default(true)
   chatColor        String   @default("#6366f1")
   buttonPosition   String   @default("bottom-right")
@@ -119,7 +119,7 @@ model ProjectSettings {
   coloredHeader    Boolean  @default(false)
   onlineTitle      String   @default("Напишите нам, мы онлайн!")
   offlineTitle     String   @default("Сейчас мы оффлайн")
-  welcomeText      String   @default("Мы онлайн ежедневно без выходных.\nОставьте сообщение — мы ответим на почту или здесь.") @db.Text
+  welcomeText      String   @db.Text
   soundEnabled     Boolean  @default(true)
   showMobileButton Boolean  @default(true)
   showLogo         Boolean  @default(true)
@@ -143,7 +143,7 @@ model Event {
   id        String   @id @default(uuid())
   projectId String
   type      String   // CONVERSATION_CREATED, MESSAGE_SENT, OPERATOR_ASSIGNED, CONVERSATION_CLOSED
-  payload   String   @default("{}") @db.Text
+  payload   String   @db.Text
   createdAt DateTime @default(now())
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
@@ -175,7 +175,7 @@ model Webhook {
   id        String   @id @default(uuid())
   projectId String
   url       String
-  events    String   @default("[]") @db.Text // JSON array: ["new_message","new_conversation"]
+  events    String   @db.Text // JSON array: ["new_message","new_conversation"]
   secret    String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
