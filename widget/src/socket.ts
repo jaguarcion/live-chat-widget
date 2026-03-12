@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import type { MessageData } from './api';
 
-const SOCKET_URL = (window as any).__LIVECHAT_WS__ || 'http://localhost:4001';
+const SOCKET_URL = (window as any).__LIVECHAT_WS__ || import.meta.env.VITE_WS_URL || 'http://localhost:3001';
 
 export class ChatSocket {
     private socket: Socket;
