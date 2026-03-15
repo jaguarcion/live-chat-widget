@@ -26,5 +26,5 @@ COPY --from=builder /app/package*.json ./
 # Set environment to production
 ENV NODE_ENV="production"
 
-# Start the server
-CMD ["npm", "run", "start"]
+# Apply DB migrations and start the server
+CMD ["sh", "-c", "until ./node_modules/.bin/prisma migrate deploy; do echo 'Waiting for database...'; sleep 3; done; node dist/index.js"]

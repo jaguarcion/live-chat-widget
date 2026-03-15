@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { getProjects, getProjectSettings, updateProjectSettings, getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember, getWebhooks, createWebhook, deleteWebhook, uploadFile, createProject } from '../api';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { getProjects, getProjectSettings, updateProjectSettings, getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember, getWebhooks, createWebhook, deleteWebhook, uploadFile, createProject, getAutoActions, getAutoActionTriggers, updateAutoActions, exportAutoActionTriggersCsv } from '../api';
 
 interface BusinessHour {
     day: number;
@@ -20,7 +20,47 @@ const COLOR_PALETTE = [
     '#1e293b', '#334155', '#475569', '#64748b', '#78716c', '#92400e',
 ];
 
-type SettingsSection = 'appearance' | 'texts' | 'settings' | 'hours' | 'smtp' | 'webhooks' | 'members' | 'install' | 'team' | 'prechat';
+type SettingsSection = 'appearance' | 'texts' | 'settings' | 'hours' | 'smtp' | 'webhooks' | 'members' | 'install' | 'team' | 'prechat' | 'automations';
+
+interface AutoActionRule {
+    id: string;
+    name: string;
+    isActive: boolean;
+    urlContains: string;
+    referrerContains: string;
+    deviceContains: string;
+    utmSource: string;
+    utmMedium: string;
+    utmCampaign: string;
+    utmTerm: string;
+    delaySeconds: number;
+    cooldownMinutes: number;
+    oncePerConversation: boolean;
+    maxTriggersPerConversation: number;
+    maxTriggersPerSession: number;
+    message: string;
+}
+
+interface AutoActionTrigger {
+    id: string;
+    createdAt: string;
+    ruleId: string | null;
+    ruleName: string;
+    conversationId: string | null;
+    visitorId: string | null;
+    messageId: string | null;
+    url: string | null;
+    replied: boolean;
+    replyMessageId: string | null;
+    replyAt: string | null;
+}
+
+interface TriggerFilters {
+    ruleId: string;
+    replied: 'all' | 'true' | 'false';
+    from: string;
+    to: string;
+}
 
 export default function SettingsPage({ initialSection = 'appearance' }: { initialSection?: SettingsSection }) {
     const [projects, setProjects] = useState<any[]>([]);
@@ -31,6 +71,14 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
     const [loading, setLoading] = useState(true);
     const [isAlwaysOnline, setIsAlwaysOnline] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [autoActions, setAutoActions] = useState<AutoActionRule[]>([]);
+    const [autoActionTriggers, setAutoActionTriggers] = useState<AutoActionTrigger[]>([]);
+    const [triggerFilters, setTriggerFilters] = useState<TriggerFilters>({
+        ruleId: '',
+        replied: 'all',
+        from: '',
+        to: '',
+    });
 
     // Settings state
     const [timezone, setTimezone] = useState('Europe/Moscow');
@@ -81,6 +129,25 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
     const [messengerMode, setMessengerMode] = useState(true);
     const [typingWatch, setTypingWatch] = useState(true);
 
+    const autoActionFunnel = useMemo(() => {
+        const map = new Map<string, { ruleName: string; triggered: number; replied: number }>();
+
+        for (const trigger of autoActionTriggers) {
+            const key = trigger.ruleId || trigger.ruleName;
+            const current = map.get(key) || { ruleName: trigger.ruleName, triggered: 0, replied: 0 };
+            current.triggered += 1;
+            if (trigger.replied) current.replied += 1;
+            map.set(key, current);
+        }
+
+        return Array.from(map.values())
+            .map(item => ({
+                ...item,
+                conversion: item.triggered > 0 ? Math.round((item.replied / item.triggered) * 100) : 0,
+            }))
+            .sort((a, b) => b.triggered - a.triggered);
+    }, [autoActionTriggers]);
+
     useEffect(() => { loadProjects(); }, []);
     useEffect(() => {
         if (initialSection) setActiveSection(initialSection);
@@ -90,6 +157,8 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
             loadSettings(selectedProjectId);
             loadWebhooks(selectedProjectId);
             loadMembers(selectedProjectId);
+            loadAutoActions(selectedProjectId);
+            loadAutoActionTriggers(selectedProjectId);
         }
     }, [selectedProjectId]);
 
@@ -161,6 +230,80 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
         } catch (err) { console.error(err); }
     };
 
+    const loadAutoActions = async (id: string) => {
+        try {
+            const res = await getAutoActions(id);
+            if (Array.isArray(res.data?.rules)) {
+                const normalized = res.data.rules.map((rule: any) => ({
+                    id: String(rule.id || `rule_${Date.now()}`),
+                    name: String(rule.name || 'Автодействие'),
+                    isActive: Boolean(rule.isActive),
+                    urlContains: String(rule.urlContains || '/'),
+                    referrerContains: String(rule.referrerContains || ''),
+                    deviceContains: String(rule.deviceContains || ''),
+                    utmSource: String(rule.utmSource || ''),
+                    utmMedium: String(rule.utmMedium || ''),
+                    utmCampaign: String(rule.utmCampaign || ''),
+                    utmTerm: String(rule.utmTerm || ''),
+                    delaySeconds: Number(rule.delaySeconds || 0),
+                    cooldownMinutes: Number(rule.cooldownMinutes || 30),
+                    oncePerConversation: Boolean(rule.oncePerConversation),
+                    maxTriggersPerConversation: Number(rule.maxTriggersPerConversation || 3),
+                    maxTriggersPerSession: Number(rule.maxTriggersPerSession || 2),
+                    message: String(rule.message || ''),
+                }));
+                setAutoActions(normalized);
+            } else {
+                setAutoActions([]);
+            }
+        } catch (err) {
+            console.error('Failed to load auto actions:', err);
+            setAutoActions([]);
+        }
+    };
+
+    const loadAutoActionTriggers = async (id: string, filters?: Partial<TriggerFilters>) => {
+        try {
+            const applied = { ...triggerFilters, ...(filters || {}) };
+            const res = await getAutoActionTriggers(id, {
+                limit: 300,
+                ruleId: applied.ruleId || undefined,
+                replied: applied.replied,
+                from: applied.from || undefined,
+                to: applied.to || undefined,
+            });
+            setAutoActionTriggers(Array.isArray(res.data?.triggers) ? res.data.triggers : []);
+        } catch (err) {
+            console.error('Failed to load auto action triggers:', err);
+            setAutoActionTriggers([]);
+        }
+    };
+
+    const handleExportTriggersCsv = async () => {
+        if (!selectedProjectId) return;
+
+        try {
+            const res = await exportAutoActionTriggersCsv(selectedProjectId, {
+                ruleId: triggerFilters.ruleId || undefined,
+                replied: triggerFilters.replied,
+                from: triggerFilters.from || undefined,
+                to: triggerFilters.to || undefined,
+            });
+
+            const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `auto-action-triggers-${selectedProjectId}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Failed to export triggers CSV:', err);
+        }
+    };
+
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -177,6 +320,8 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                 payload.businessHours = hours;
             }
             await updateProjectSettings(selectedProjectId, payload);
+            await updateAutoActions(selectedProjectId, { rules: autoActions });
+            await loadAutoActionTriggers(selectedProjectId);
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
         } catch (err) {
@@ -194,6 +339,7 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
         { key: 'appearance', label: 'Внешний вид', icon: '🎨' },
         { key: 'texts', label: 'Тексты окна чата', icon: '💬' },
         { key: 'prechat', label: 'Сбор контактов', icon: '📝' },
+        { key: 'automations', label: 'Автодействия', icon: '⚡' },
         { key: 'settings', label: 'Настройки', icon: '⚙️' },
         { key: 'hours', label: 'Рабочие часы', icon: '🕐' },
         { key: 'smtp', label: 'Email интеграция', icon: '📧' },
@@ -414,6 +560,411 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+
+                    {/* ======== AUTOMATIONS ======== */}
+                    {activeSection === 'automations' && (
+                        <div>
+                            <h1 className="text-2xl font-bold text-text-primary mb-1">Автодействия</h1>
+                            <p className="text-sm text-text-muted mb-8">Автоматические приглашения в чат по URL страницы и задержке.</p>
+
+                            <SectionBlock title="Правила">
+                                <div className="space-y-4">
+                                    {autoActions.length === 0 && (
+                                        <div className="text-sm text-text-muted">Правил пока нет. Добавьте первое автодействие.</div>
+                                    )}
+
+                                    {autoActions.map((rule, index) => (
+                                        <div key={rule.id} className="p-4 border border-border rounded-xl bg-surface-tertiary space-y-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <input
+                                                    value={rule.name}
+                                                    onChange={e => {
+                                                        const next = [...autoActions];
+                                                        next[index].name = e.target.value;
+                                                        setAutoActions(next);
+                                                    }}
+                                                    className="flex-1 px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                    placeholder="Название правила"
+                                                />
+
+                                                <label className="flex items-center gap-2 text-xs text-text-secondary">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={rule.isActive}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].isActive = e.target.checked;
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="accent-primary"
+                                                    />
+                                                    Включено
+                                                </label>
+
+                                                <button
+                                                    onClick={() => setAutoActions(prev => prev.filter((_, i) => i !== index))}
+                                                    className="px-3 py-2 rounded-lg bg-danger/10 text-danger text-xs font-semibold border-none cursor-pointer"
+                                                >
+                                                    Удалить
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="col-span-1">
+                                                    <label className="text-[11px] text-text-muted mb-1 block">URL содержит</label>
+                                                    <input
+                                                        value={rule.urlContains}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].urlContains = e.target.value;
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                        placeholder="/pricing или *"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">Referrer содержит</label>
+                                                    <input
+                                                        value={rule.referrerContains}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].referrerContains = e.target.value;
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                        placeholder="google.com"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">Device содержит</label>
+                                                    <input
+                                                        value={rule.deviceContains}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].deviceContains = e.target.value;
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                        placeholder="mobile"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">UTM source</label>
+                                                    <input
+                                                        value={rule.utmSource}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].utmSource = e.target.value;
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                        placeholder="google"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">UTM campaign</label>
+                                                    <input
+                                                        value={rule.utmCampaign}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].utmCampaign = e.target.value;
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                        placeholder="spring_sale"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">UTM medium</label>
+                                                    <input
+                                                        value={rule.utmMedium}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].utmMedium = e.target.value;
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                        placeholder="cpc"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">UTM term</label>
+                                                    <input
+                                                        value={rule.utmTerm}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].utmTerm = e.target.value;
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                        placeholder="livechat"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">Задержка (сек)</label>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        max={120}
+                                                        value={rule.delaySeconds}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].delaySeconds = Number(e.target.value);
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">Кулдаун (мин)</label>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={1440}
+                                                        value={rule.cooldownMinutes}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].cooldownMinutes = Number(e.target.value);
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                    />
+                                                </div>
+
+                                                <div className="flex items-end pb-2">
+                                                    <label className="flex items-center gap-2 text-xs text-text-secondary">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={rule.oncePerConversation}
+                                                            onChange={e => {
+                                                                const next = [...autoActions];
+                                                                next[index].oncePerConversation = e.target.checked;
+                                                                setAutoActions(next);
+                                                            }}
+                                                            className="accent-primary"
+                                                        />
+                                                        Только один раз на диалог
+                                                    </label>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">Лимит на диалог</label>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={20}
+                                                        value={rule.maxTriggersPerConversation}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].maxTriggersPerConversation = Number(e.target.value || 1);
+                                                            setAutoActions(next);
+                                                        }}
+                                                        disabled={rule.oncePerConversation}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[11px] text-text-muted mb-1 block">Лимит на сессию</label>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={20}
+                                                        value={rule.maxTriggersPerSession}
+                                                        onChange={e => {
+                                                            const next = [...autoActions];
+                                                            next[index].maxTriggersPerSession = Number(e.target.value || 1);
+                                                            setAutoActions(next);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="text-[11px] text-text-muted mb-1 block">Текст автосообщения</label>
+                                                <textarea
+                                                    rows={3}
+                                                    value={rule.message}
+                                                    onChange={e => {
+                                                        const next = [...autoActions];
+                                                        next[index].message = e.target.value;
+                                                        setAutoActions(next);
+                                                    }}
+                                                    className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                    placeholder="Чем могу помочь с выбором?"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <button
+                                    onClick={() => setAutoActions(prev => ([
+                                        ...prev,
+                                        {
+                                            id: `rule_${Date.now()}`,
+                                            name: `Новое правило ${prev.length + 1}`,
+                                            isActive: true,
+                                            urlContains: '/',
+                                            referrerContains: '',
+                                            deviceContains: '',
+                                            utmSource: '',
+                                            utmMedium: '',
+                                            utmCampaign: '',
+                                            utmTerm: '',
+                                            delaySeconds: 15,
+                                            cooldownMinutes: 30,
+                                            oncePerConversation: true,
+                                            maxTriggersPerConversation: 3,
+                                            maxTriggersPerSession: 2,
+                                            message: 'Здравствуйте! Подсказать что-то по этой странице?',
+                                        }
+                                    ]))}
+                                    className="mt-4 px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white text-sm font-medium border-none cursor-pointer"
+                                >
+                                    Добавить правило
+                                </button>
+
+                                <div className="mt-6 border-t border-border pt-5">
+                                    <h3 className="text-sm font-semibold text-text-primary mb-3">Воронка по правилам (последние 300 срабатываний)</h3>
+                                    {autoActionFunnel.length === 0 ? (
+                                        <div className="text-xs text-text-muted mb-4">Недостаточно данных для воронки</div>
+                                    ) : (
+                                        <div className="space-y-2 mb-5">
+                                            {autoActionFunnel.map(item => (
+                                                <div key={item.ruleName} className="p-3 rounded-lg bg-surface-secondary border border-border">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-xs font-semibold text-text-primary truncate">{item.ruleName}</span>
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                                                            {item.conversion}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-1 text-[11px] text-text-muted">
+                                                        Сработало: {item.triggered} · Ответили: {item.replied}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-sm font-semibold text-text-primary">Последние срабатывания</h3>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={handleExportTriggersCsv}
+                                                className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary hover:bg-primary/20 cursor-pointer"
+                                            >
+                                                CSV
+                                            </button>
+                                            <button
+                                                onClick={() => loadAutoActionTriggers(selectedProjectId)}
+                                                className="px-3 py-1.5 rounded-lg bg-surface-secondary border border-border text-xs text-text-secondary hover:text-text-primary cursor-pointer"
+                                            >
+                                                Обновить
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-4 gap-2 mb-3">
+                                        <select
+                                            value={triggerFilters.ruleId}
+                                            onChange={e => setTriggerFilters(prev => ({ ...prev, ruleId: e.target.value }))}
+                                            className="px-2 py-1.5 rounded-lg bg-surface-secondary border border-border text-xs text-text-primary"
+                                        >
+                                            <option value="">Все правила</option>
+                                            {autoActions.map(rule => (
+                                                <option key={rule.id} value={rule.id}>{rule.name}</option>
+                                            ))}
+                                        </select>
+
+                                        <select
+                                            value={triggerFilters.replied}
+                                            onChange={e => setTriggerFilters(prev => ({ ...prev, replied: e.target.value as 'all' | 'true' | 'false' }))}
+                                            className="px-2 py-1.5 rounded-lg bg-surface-secondary border border-border text-xs text-text-primary"
+                                        >
+                                            <option value="all">Ответ: любой</option>
+                                            <option value="true">Только с ответом</option>
+                                            <option value="false">Только без ответа</option>
+                                        </select>
+
+                                        <input
+                                            type="date"
+                                            value={triggerFilters.from}
+                                            onChange={e => setTriggerFilters(prev => ({ ...prev, from: e.target.value }))}
+                                            className="px-2 py-1.5 rounded-lg bg-surface-secondary border border-border text-xs text-text-primary"
+                                        />
+
+                                        <input
+                                            type="date"
+                                            value={triggerFilters.to}
+                                            onChange={e => setTriggerFilters(prev => ({ ...prev, to: e.target.value }))}
+                                            className="px-2 py-1.5 rounded-lg bg-surface-secondary border border-border text-xs text-text-primary"
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <button
+                                            onClick={() => loadAutoActionTriggers(selectedProjectId)}
+                                            className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium border-none cursor-pointer"
+                                        >
+                                            Применить фильтры
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const resetFilters: TriggerFilters = { ruleId: '', replied: 'all', from: '', to: '' };
+                                                setTriggerFilters(resetFilters);
+                                                loadAutoActionTriggers(selectedProjectId, resetFilters);
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg bg-surface-secondary border border-border text-xs text-text-secondary hover:text-text-primary cursor-pointer"
+                                        >
+                                            Сбросить
+                                        </button>
+                                    </div>
+
+                                    {autoActionTriggers.length === 0 ? (
+                                        <div className="text-xs text-text-muted">Срабатываний пока нет</div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                            {autoActionTriggers.map(trigger => (
+                                                <div key={trigger.id} className="p-3 rounded-lg bg-surface-secondary border border-border">
+                                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                                        <span className="text-xs font-semibold text-text-primary truncate">{trigger.ruleName}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${trigger.replied
+                                                                ? 'bg-success/15 text-success'
+                                                                : 'bg-text-muted/15 text-text-muted'
+                                                                }`}>
+                                                                {trigger.replied ? 'Есть ответ' : 'Без ответа'}
+                                                            </span>
+                                                            <span className="text-[10px] text-text-muted flex-shrink-0">
+                                                                {new Date(trigger.createdAt).toLocaleString('ru-RU')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[11px] text-text-muted truncate">URL: {trigger.url || '—'}</div>
+                                                    <div className="text-[11px] text-text-muted">Диалог: {trigger.conversationId ? `${trigger.conversationId.slice(0, 8)}...` : '—'}</div>
+                                                    <div className="text-[11px] text-text-muted">Посетитель: {trigger.visitorId ? `${trigger.visitorId.slice(0, 8)}...` : '—'}</div>
+                                                    {trigger.replyAt && (
+                                                        <div className="text-[11px] text-text-muted">Ответил: {new Date(trigger.replyAt).toLocaleString('ru-RU')}</div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </SectionBlock>
                         </div>
                     )}
 

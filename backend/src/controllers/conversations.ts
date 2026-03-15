@@ -5,6 +5,13 @@ import { getIO } from '../socketInstance';
 import { logEvent } from '../services/eventLogger';
 import { triggerWebhook } from '../services/webhookService';
 
+const ensureProjectAccess = async (userId: string, projectId: string) => {
+    return prisma.projectMember.findUnique({
+        where: { userId_projectId: { userId, projectId } },
+        select: { userId: true }
+    });
+};
+
 export const getConversations = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user?.userId;
@@ -39,7 +46,16 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
                     isRead: false
                 }
             });
-            return { ...conv, unreadCount };
+
+            const operatorReplyCount = await prisma.message.count({
+                where: {
+                    conversationId: conv.id,
+                    sender: 'OPERATOR',
+                    type: { not: 'OPERATOR_JOIN' }
+                }
+            });
+
+            return { ...conv, unreadCount, operatorReplyCount };
         }));
 
         res.json(conversationsWithUnread);
@@ -106,6 +122,11 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
                 const io = getIO();
                 io.to(`conversation_${id}`).emit('server_message', joinMessage);
                 io.to('operators').emit('new_message', joinMessage);
+                io.to(`project_${conversation.projectId}`).emit('conversation_updated', {
+                    conversationId: id,
+                    operatorId: userId,
+                    status: conversation.status,
+                });
             } catch (e) {
                 console.error('Socket broadcast error (auto-join):', e);
             }
@@ -161,19 +182,46 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
 
 export const updateConversation = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
         const { id } = req.params;
         const { status, operatorId } = req.body;
 
+        const existingConversation = await prisma.conversation.findUnique({
+            where: { id },
+            include: {
+                project: { select: { id: true, name: true } },
+                visitor: true,
+                operator: { select: { id: true, name: true, email: true } }
+            }
+        });
+
+        if (!existingConversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
+
+        const membership = await ensureProjectAccess(userId, existingConversation.projectId);
+        if (!membership) { res.status(403).json({ error: 'Forbidden' }); return; }
+
         const data: any = {};
         if (status) data.status = status;
-        if (operatorId) data.operatorId = operatorId;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'operatorId')) {
+            if (operatorId) {
+                const targetMember = await ensureProjectAccess(operatorId, existingConversation.projectId);
+                if (!targetMember) {
+                    res.status(400).json({ error: 'Operator is not a member of this project' });
+                    return;
+                }
+            }
+            data.operatorId = operatorId || null;
+        }
 
         const conversation = await prisma.conversation.update({
             where: { id },
             data,
             include: {
                 visitor: true,
-                operator: { select: { id: true, name: true, email: true } }
+                operator: { select: { id: true, name: true, email: true } },
+                project: { select: { id: true, name: true } }
             }
         });
 
@@ -185,7 +233,9 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
             logEvent(conversation.projectId, 'CONVERSATION_REOPENED', { conversationId: id });
         }
 
-        if (operatorId) {
+        const operatorChanged = Object.prototype.hasOwnProperty.call(req.body, 'operatorId') && operatorId !== existingConversation.operatorId;
+
+        if (operatorChanged && operatorId) {
             logEvent(conversation.projectId, 'OPERATOR_ASSIGNED', { conversationId: id, operatorId });
             triggerWebhook(conversation.projectId, 'operator_assigned', { conversationId: id, operatorId });
 
@@ -210,6 +260,17 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
             } catch (e) {
                 console.error('Socket broadcast error (join):', e);
             }
+        }
+
+        try {
+            const io = getIO();
+            io.to(`project_${conversation.projectId}`).emit('conversation_updated', {
+                conversationId: id,
+                operatorId: conversation.operatorId,
+                status: conversation.status,
+            });
+        } catch (e) {
+            console.error('Socket broadcast error (conversation update):', e);
         }
 
         res.json(conversation);

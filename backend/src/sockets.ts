@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { logEvent } from './services/eventLogger';
 import { sendOfflineNotification, sendVisitorOfflineNotification } from './services/emailService';
 import { triggerWebhook } from './services/webhookService';
+import { evaluateAutoActionsForPage } from './services/autoActions';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
@@ -59,9 +60,10 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
         });
 
         // Visitor Connection
-        socket.on('visitor_connect', async (data: { conversationId: string; visitorId?: string }) => {
+        socket.on('visitor_connect', async (data: { conversationId: string; visitorId?: string; url?: string; title?: string; sessionId?: string }) => {
             socket.data.conversationId = data.conversationId;
             socket.data.visitorId = data.visitorId;
+            socket.data.sessionId = data.sessionId;
             socket.join(`conversation_${data.conversationId}`);
             console.log(`Visitor connected to conversation ${data.conversationId}`);
 
@@ -79,6 +81,25 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                         conversationId: data.conversationId,
                         visitorId,
                     });
+
+                    if (data.url) {
+                        await prisma.pageView.create({
+                            data: {
+                                visitorId,
+                                url: data.url,
+                                title: data.title || null,
+                            }
+                        });
+
+                        await evaluateAutoActionsForPage({
+                            projectId: conversation.projectId,
+                            conversationId: data.conversationId,
+                            visitorId,
+                            url: data.url,
+                            sessionId: data.sessionId,
+                            io,
+                        });
+                    }
                 }
             } catch (e) {
                 console.error('visitor_connect lookup error:', e);
@@ -107,6 +128,22 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                         sender: 'VISITOR'
                     }
                 });
+
+                if (conversation?.projectId) {
+                    await prisma.autoActionTrigger.updateMany({
+                        where: {
+                            projectId: conversation.projectId,
+                            conversationId: data.conversationId,
+                            replied: false,
+                            createdAt: { lt: message.createdAt },
+                        },
+                        data: {
+                            replied: true,
+                            replyMessageId: message.id,
+                            replyAt: message.createdAt,
+                        }
+                    });
+                }
 
                 // Broadcast to visitor and operators of this project
                 io.to(`conversation_${data.conversationId}`).emit('server_message', message);
@@ -221,6 +258,8 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
             visitorId: string;
             url: string;
             title?: string;
+            conversationId?: string;
+            sessionId?: string;
         }) => {
             try {
                 if (data.visitorId && data.url) {
@@ -231,6 +270,31 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                             title: data.title || null,
                         }
                     });
+
+                    const openConversation = data.conversationId
+                        ? await prisma.conversation.findUnique({
+                            where: { id: data.conversationId },
+                            select: { id: true, projectId: true, visitorId: true, status: true }
+                        })
+                        : await prisma.conversation.findFirst({
+                            where: {
+                                visitorId: data.visitorId,
+                                status: 'OPEN'
+                            },
+                            select: { id: true, projectId: true, visitorId: true, status: true },
+                            orderBy: { updatedAt: 'desc' }
+                        });
+
+                    if (openConversation && openConversation.status === 'OPEN') {
+                        await evaluateAutoActionsForPage({
+                            projectId: openConversation.projectId,
+                            conversationId: openConversation.id,
+                            visitorId: openConversation.visitorId,
+                            url: data.url,
+                            sessionId: data.sessionId || socket.data.sessionId,
+                            io,
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Page view tracking error:', error);

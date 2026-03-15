@@ -75,6 +75,7 @@ export class LiveChatWidget {
                 url: window.location.href,
                 language: navigator.language,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                utm: this.getUtmFromUrl(),
             };
 
             const data = await initWidget(this.projectId, this.visitorId, metadata);
@@ -106,6 +107,7 @@ export class LiveChatWidget {
             this.renderMessages();
 
             this.chatSocket.connect(this.conversationId, this.visitorId ?? undefined);
+            this.startPageTracking();
             this.chatSocket.onMessage((msg) => {
                 if (this.messages.find(m => m.id === msg.id)) return;
 
@@ -805,6 +807,43 @@ export class LiveChatWidget {
             this.typingIndicatorEl.style.display = show ? 'block' : 'none';
             if (show) this.scrollToBottom();
         }
+    }
+
+    private getUtmFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            source: params.get('utm_source') || '',
+            medium: params.get('utm_medium') || '',
+            campaign: params.get('utm_campaign') || '',
+            term: params.get('utm_term') || '',
+            content: params.get('utm_content') || '',
+        };
+    }
+
+    private startPageTracking() {
+        if (!this.visitorId) return;
+
+        const sendCurrentPage = () => {
+            if (!this.visitorId) return;
+            this.chatSocket.sendPageView(this.visitorId, window.location.href, document.title, this.conversationId || undefined);
+        };
+
+        sendCurrentPage();
+
+        const originalPushState = window.history.pushState;
+        const originalReplaceState = window.history.replaceState;
+
+        window.history.pushState = function (...args) {
+            originalPushState.apply(this, args as any);
+            setTimeout(sendCurrentPage, 0);
+        };
+
+        window.history.replaceState = function (...args) {
+            originalReplaceState.apply(this, args as any);
+            setTimeout(sendCurrentPage, 0);
+        };
+
+        window.addEventListener('popstate', () => setTimeout(sendCurrentPage, 0));
     }
 
     private escapeHtml(str: string | null): string {

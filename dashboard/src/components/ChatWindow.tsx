@@ -1,19 +1,37 @@
 import { useState, useRef, useEffect } from 'react';
+import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
-import { sendMessage as sendMessageAPI, uploadFile } from '../api';
+import { getProjectMembers, sendMessage as sendMessageAPI, updateConversation, uploadFile } from '../api';
 import QuickRepliesPanel from './QuickRepliesPanel';
 
+interface ProjectMember {
+    user: {
+        id: string;
+        name: string;
+        email: string;
+    };
+}
+
 export default function ChatWindow() {
-    const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping } = useChatStore();
+    const { user } = useAuthStore();
+    const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping, fetchConversations } = useChatStore();
     const [text, setText] = useState('');
     const typingTimeoutRef = useRef<any>(null);
     const [sending, setSending] = useState(false);
     const [showQuickReplies, setShowQuickReplies] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+    const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
+    const [assignmentBusy, setAssignmentBusy] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const activeConversation = conversations.find(c => c.id === activeConversationId);
+    const isUnassignedOpen = activeConversation?.status === 'OPEN' && !activeConversation?.operatorId;
+    const canSendMessage = !!activeConversationId && activeConversation?.status === 'OPEN';
+
+    const waitingMinutes = activeConversation && activeConversation.status === 'OPEN' && (activeConversation.operatorReplyCount || 0) === 0
+        ? Math.floor((Date.now() - new Date(activeConversation.createdAt).getTime()) / 60000)
+        : null;
 
     useEffect(() => {
         // Instant scroll when switching conversation
@@ -25,8 +43,19 @@ export default function ChatWindow() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    useEffect(() => {
+        if (!activeConversation?.projectId) {
+            setProjectMembers([]);
+            return;
+        }
+
+        getProjectMembers(activeConversation.projectId)
+            .then(({ data }) => setProjectMembers(data))
+            .catch((err) => console.error('Failed to load project members:', err));
+    }, [activeConversation?.projectId]);
+
     const handleSend = async () => {
-        if (!text.trim() || !activeConversationId) return;
+        if (!text.trim() || !activeConversationId || !canSendMessage) return;
         setSending(true);
         try {
             const { data } = await sendMessageAPI(activeConversationId, text.trim());
@@ -42,7 +71,7 @@ export default function ChatWindow() {
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !activeConversationId) return;
+        if (!file || !activeConversationId || !canSendMessage) return;
 
         try {
             const { data } = await uploadFile(file);
@@ -73,7 +102,7 @@ export default function ChatWindow() {
 
     const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setText(e.target.value);
-        if (!activeConversationId) return;
+        if (!activeConversationId || !canSendMessage) return;
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         else sendTyping(activeConversationId, true);
@@ -82,6 +111,20 @@ export default function ChatWindow() {
             sendTyping(activeConversationId, false);
             typingTimeoutRef.current = null;
         }, 2000);
+    };
+
+    const handleAssignConversation = async (nextOperatorId: string) => {
+        if (!activeConversationId || !nextOperatorId) return;
+
+        setAssignmentBusy(true);
+        try {
+            await updateConversation(activeConversationId, { operatorId: nextOperatorId });
+            await fetchConversations();
+        } catch (err) {
+            console.error('Failed to update assignee:', err);
+        } finally {
+            setAssignmentBusy(false);
+        }
     };
 
     if (!activeConversationId) {
@@ -121,9 +164,55 @@ export default function ChatWindow() {
                     <h3 className="text-sm font-semibold text-text-primary">
                         {activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель'}
                     </h3>
-                    <p className="text-xs text-text-muted">{activeConversation?.project.name}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <p className="text-xs text-text-muted">{activeConversation?.project.name}</p>
+                        {activeConversation?.operator ? (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                Ответственный: {activeConversation.operator.name}
+                            </span>
+                        ) : (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-success/15 text-success">
+                                В очереди
+                            </span>
+                        )}
+                        {waitingMinutes !== null && (
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full ${waitingMinutes < 5
+                                ? 'bg-primary/10 text-primary'
+                                : waitingMinutes < 10
+                                    ? 'bg-amber-500/15 text-amber-600'
+                                    : 'bg-danger/15 text-danger'
+                                }`}>
+                                Ждёт {waitingMinutes}м
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
+                    {isUnassignedOpen && user?.id && (
+                        <button
+                            onClick={() => handleAssignConversation(user.id)}
+                            disabled={assignmentBusy}
+                            className="px-3 py-2 rounded-lg bg-primary text-white text-xs font-semibold border-none cursor-pointer disabled:opacity-50"
+                        >
+                            Взять чат
+                        </button>
+                    )}
+                    {activeConversation?.status === 'OPEN' && projectMembers.length > 0 && (
+                        <select
+                            value={activeConversation.operatorId || ''}
+                            onChange={(e) => handleAssignConversation(e.target.value)}
+                            disabled={assignmentBusy}
+                            className="px-3 py-2 rounded-lg bg-surface border border-border text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        >
+                            <option value="">Без ответственного</option>
+                            {projectMembers.map((member) => (
+                                <option key={member.user.id} value={member.user.id}>
+                                    {member.user.name}
+                                    {member.user.id === user?.id ? ' (я)' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    )}
                     <span className={`text-xs px-2 py-1 rounded-full ${activeConversation?.status === 'OPEN'
                         ? 'bg-success/15 text-success'
                         : 'bg-text-muted/15 text-text-muted'
@@ -277,6 +366,7 @@ export default function ChatWindow() {
                 <div className="flex items-end gap-2 px-1">
                     <button
                         onClick={() => setShowQuickReplies(!showQuickReplies)}
+                        disabled={!canSendMessage}
                         className="w-10 h-10 rounded-lg bg-surface text-text-muted hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all flex-shrink-0 border border-border cursor-pointer shadow-sm"
                         title="Быстрые ответы (/)"
                     >
@@ -287,6 +377,7 @@ export default function ChatWindow() {
 
                     <button
                         onClick={() => fileInputRef.current?.click()}
+                        disabled={!canSendMessage}
                         className="w-10 h-10 rounded-lg bg-surface text-text-muted hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all flex-shrink-0 border border-border cursor-pointer shadow-sm"
                         title="Прикрепить файл"
                     >
@@ -299,14 +390,15 @@ export default function ChatWindow() {
                         value={text}
                         onChange={handleTextChange}
                         onKeyDown={handleKeyDown}
-                        placeholder="Введите сообщение..."
+                        placeholder={canSendMessage ? 'Введите сообщение...' : 'Закрытый чат. Отправка отключена'}
                         rows={1}
+                        disabled={!canSendMessage}
                         className="flex-1 px-4 py-2.5 rounded-lg bg-surface border border-border text-text-primary placeholder-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm min-h-[42px] shadow-sm"
                     />
 
                     <button
                         onClick={handleSend}
-                        disabled={!text.trim() || sending}
+                        disabled={!text.trim() || sending || !canSendMessage}
                         className="w-10 h-10 rounded-lg bg-primary hover:bg-primary-hover text-white flex items-center justify-center transition-all disabled:opacity-40 flex-shrink-0 border-none cursor-pointer shadow-md shadow-primary/20 "
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -173,6 +173,20 @@ export const sendWidgetMessage = async (req: Request, res: Response): Promise<vo
             }
         });
 
+        await prisma.autoActionTrigger.updateMany({
+            where: {
+                projectId: conversation.projectId,
+                conversationId,
+                replied: false,
+                createdAt: { lt: message.createdAt },
+            },
+            data: {
+                replied: true,
+                replyMessageId: message.id,
+                replyAt: message.createdAt,
+            }
+        });
+
         // Update conversation timestamp
         await prisma.conversation.update({
             where: { id: conversationId },

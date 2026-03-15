@@ -37,6 +37,8 @@ model Project {
   events        Event[]
   presences     OperatorPresence[]
   webhooks      Webhook[]
+  autoActionRules    AutoActionRule[]
+  autoActionTriggers AutoActionTrigger[]
 }
 
 model ProjectMember {
@@ -182,4 +184,57 @@ model Webhook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model AutoActionRule {
+  projectId                  String
+  id                         String
+  name                       String
+  isActive                   Boolean  @default(true)
+  urlContains                String   @default("/")
+  referrerContains           String   @default("")
+  deviceContains             String   @default("")
+  utmSource                  String   @default("")
+  utmMedium                  String   @default("")
+  utmCampaign                String   @default("")
+  utmTerm                    String   @default("")
+  delaySeconds               Int      @default(0)
+  cooldownMinutes            Int      @default(30)
+  oncePerConversation        Boolean  @default(true)
+  maxTriggersPerConversation Int      @default(3)
+  maxTriggersPerSession      Int      @default(2)
+  message                    String   @db.Text
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  triggers AutoActionTrigger[]
+
+  @@id([projectId, id])
+  @@index([projectId, isActive])
+}
+
+model AutoActionTrigger {
+  id            String   @id @default(uuid())
+  projectId     String
+  ruleId        String
+  conversationId String
+  visitorId     String
+  sessionId     String?
+  messageId     String?
+  url           String?  @db.Text
+  replied       Boolean  @default(false)
+  replyMessageId String?
+  replyAt       DateTime?
+  createdAt     DateTime @default(now())
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  rule    AutoActionRule @relation(fields: [projectId, ruleId], references: [projectId, id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([projectId, ruleId, createdAt])
+  @@index([projectId, conversationId, createdAt])
+  @@index([projectId, visitorId, createdAt])
+  @@index([projectId, sessionId, createdAt])
+  @@index([projectId, replied, createdAt])
 }

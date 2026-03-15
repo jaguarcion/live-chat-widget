@@ -67,6 +67,34 @@ export const getProjectSettings = (projectId: string) => api.get(`/settings/${pr
 export const updateProjectSettings = (projectId: string, data: any) =>
     api.put(`/settings/${projectId}`, data);
 
+// Auto Actions
+export const getAutoActions = (projectId: string) => api.get(`/auto-actions/${projectId}`);
+export const updateAutoActions = (projectId: string, data: { rules: any[] }) =>
+    api.put(`/auto-actions/${projectId}`, data);
+export const getAutoActionTriggers = (
+    projectId: string,
+    params?: {
+        limit?: number;
+        ruleId?: string;
+        replied?: 'all' | 'true' | 'false';
+        from?: string;
+        to?: string;
+    }
+) => api.get(`/auto-actions/${projectId}/triggers`, { params: { limit: 200, ...params } });
+
+export const exportAutoActionTriggersCsv = (
+    projectId: string,
+    params?: {
+        ruleId?: string;
+        replied?: 'all' | 'true' | 'false';
+        from?: string;
+        to?: string;
+    }
+) => api.get(`/auto-actions/${projectId}/triggers`, {
+    params: { ...params, format: 'csv', limit: 500 },
+    responseType: 'blob'
+});
+
 // Webhooks
 export const getWebhooks = (projectId: string) => api.get(`/webhooks/${projectId}`);
 export const createWebhook = (projectId: string, data: any) => api.post(`/webhooks/${projectId}`, data);

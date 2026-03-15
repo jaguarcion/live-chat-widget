@@ -1,5 +1,9 @@
+import { useMemo, useState } from 'react';
+import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
 import type { Conversation } from '../store/chatStore';
+
+type FilterKey = 'queue' | 'mine' | 'open' | 'closed';
 
 function timeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -11,9 +15,30 @@ function timeAgo(dateStr: string): string {
     return `${Math.floor(hours / 24)}д`;
 }
 
+function getSlaState(conversation: Conversation): { label: string; tone: string } | null {
+    if (conversation.status !== 'OPEN' || (conversation.operatorReplyCount || 0) > 0) {
+        return null;
+    }
+
+    const minutes = Math.floor((Date.now() - new Date(conversation.createdAt).getTime()) / 60000);
+    if (minutes < 5) {
+        return { label: `SLA ${minutes}м`, tone: 'bg-primary/10 text-primary' };
+    }
+    if (minutes < 10) {
+        return { label: `SLA ${minutes}м`, tone: 'bg-amber-500/15 text-amber-600' };
+    }
+    return { label: `SLA ${minutes}м`, tone: 'bg-danger/15 text-danger' };
+}
+
 function ConversationItem({ conversation, isActive, isOnline }: { conversation: Conversation; isActive: boolean; isOnline: boolean }) {
     const { setActiveConversation } = useChatStore();
     const lastMessage = conversation.messages[0];
+    const sla = getSlaState(conversation);
+    const assignmentLabel = conversation.status === 'CLOSED'
+        ? 'Закрыт'
+        : conversation.operator
+            ? `Ведёт ${conversation.operator.name}`
+            : 'Очередь';
 
     return (
         <button
@@ -50,12 +75,24 @@ function ConversationItem({ conversation, isActive, isOnline }: { conversation: 
                         {lastMessage ? lastMessage.text : 'Нет сообщений'}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${conversation.status === 'OPEN'
-                            ? 'bg-success/15 text-success'
-                            : 'bg-text-muted/15 text-text-muted'
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${conversation.operator
+                            ? 'bg-primary/10 text-primary'
+                            : conversation.status === 'OPEN'
+                                ? 'bg-success/15 text-success'
+                                : 'bg-text-muted/15 text-text-muted'
                             }`}>
-                            {conversation.status === 'OPEN' ? 'Открыт' : 'Закрыт'}
+                            {assignmentLabel}
                         </span>
+                        {sla && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${sla.tone}`}>
+                                {sla.label}
+                            </span>
+                        )}
+                        {!!conversation.unreadCount && conversation.unreadCount > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-danger text-white font-semibold">
+                                {conversation.unreadCount}
+                            </span>
+                        )}
                         <span className="text-[10px] text-text-muted truncate">
                             {conversation.project.name}
                         </span>
@@ -67,7 +104,30 @@ function ConversationItem({ conversation, isActive, isOnline }: { conversation: 
 }
 
 export default function ConversationList() {
+    const { user } = useAuthStore();
     const { conversations, activeConversationId, loading, onlineVisitors } = useChatStore();
+    const [filter, setFilter] = useState<FilterKey>('queue');
+
+    const counts = useMemo(() => ({
+        queue: conversations.filter(conv => conv.status === 'OPEN' && !conv.operatorId).length,
+        mine: conversations.filter(conv => conv.status === 'OPEN' && conv.operatorId === user?.id).length,
+        open: conversations.filter(conv => conv.status === 'OPEN').length,
+        closed: conversations.filter(conv => conv.status === 'CLOSED').length,
+    }), [conversations, user?.id]);
+
+    const visibleConversations = useMemo(() => conversations.filter(conv => {
+        if (filter === 'queue') return conv.status === 'OPEN' && !conv.operatorId;
+        if (filter === 'mine') return conv.status === 'OPEN' && conv.operatorId === user?.id;
+        if (filter === 'closed') return conv.status === 'CLOSED';
+        return conv.status === 'OPEN';
+    }), [conversations, filter, user?.id]);
+
+    const filterButtons: Array<{ key: FilterKey; label: string }> = [
+        { key: 'queue', label: 'Очередь' },
+        { key: 'mine', label: 'Мои' },
+        { key: 'open', label: 'Открытые' },
+        { key: 'closed', label: 'Закрытые' },
+    ];
 
     if (loading && conversations.length === 0) {
         return (
@@ -90,15 +150,38 @@ export default function ConversationList() {
     }
 
     return (
-        <div className="flex-1 overflow-y-auto">
-            {conversations.map((conv) => (
+        <div className="flex-1 min-h-0 flex flex-col">
+            <div className="px-3 py-3 border-b border-border bg-surface-secondary/70 backdrop-blur-sm">
+                <div className="grid grid-cols-2 gap-2">
+                    {filterButtons.map(button => (
+                        <button
+                            key={button.key}
+                            onClick={() => setFilter(button.key)}
+                            className={`px-3 py-2 rounded-lg text-xs font-medium border cursor-pointer transition-colors ${filter === button.key
+                                ? 'bg-primary/10 text-primary border-primary/20'
+                                : 'bg-surface text-text-muted border-border hover:text-text-primary hover:bg-surface-tertiary'
+                                }`}
+                        >
+                            {button.label} ({counts[button.key]})
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+                {visibleConversations.length === 0 ? (
+                    <div className="flex h-full items-center justify-center p-6 text-center text-sm text-text-muted">
+                        Для этого фильтра диалогов нет
+                    </div>
+                ) : visibleConversations.map((conv) => (
                 <ConversationItem
                     key={conv.id}
                     conversation={conv}
                     isActive={activeConversationId === conv.id}
                     isOnline={onlineVisitors.has(conv.visitorId)}
                 />
-            ))}
+                ))}
+            </div>
         </div>
     );
 }

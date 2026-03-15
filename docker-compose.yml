@@ -7,6 +7,12 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-livechat}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     volumes:
       - mysql_data:/var/lib/mysql
 
@@ -23,7 +29,8 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
       - WIDGET_URL=${WIDGET_URL:-http://localhost:5174}
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 
   dashboard:
     build:

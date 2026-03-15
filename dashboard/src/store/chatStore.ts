@@ -43,6 +43,7 @@ export interface Conversation {
     project: { id: string; name: string };
     messages: Message[];
     unreadCount?: number;
+    operatorReplyCount?: number;
 }
 
 interface TypingData {
@@ -169,6 +170,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
 
         socket.on('new_conversation', () => {
+            get().fetchConversations();
+        });
+
+        socket.on('conversation_updated', () => {
             get().fetchConversations();
         });
 

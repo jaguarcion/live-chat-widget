@@ -7,10 +7,26 @@ export interface InitResponse {
     settings?: any;
 }
 
+export interface WidgetMetadata {
+    referrer?: string;
+    device?: string;
+    url?: string;
+    language?: string;
+    timezone?: string;
+    utm?: {
+        source?: string;
+        medium?: string;
+        campaign?: string;
+        term?: string;
+        content?: string;
+    };
+    [key: string]: any;
+}
+
 export async function initWidget(
     projectId: string,
     visitorId: string | null,
-    metadata: Record<string, string>
+    metadata: WidgetMetadata
 ): Promise<InitResponse> {
     const res = await fetch(`${API_BASE}/widget/init`, {
         method: 'POST',

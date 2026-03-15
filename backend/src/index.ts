@@ -13,6 +13,7 @@ import settingsRoutes from './routes/settings';
 import presenceRoutes from './routes/presence';
 import memberRoutes from './routes/members';
 import webhookRoutes from './routes/webhooks';
+import autoActionRoutes from './routes/autoActions';
 import { setupSockets } from './sockets';
 import { setIO } from './socketInstance';
 
@@ -35,6 +36,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/presence', presenceRoutes);
 app.use('/api/projects', memberRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/auto-actions', autoActionRoutes);
 
 app.get('/', (req, res) => {
   res.send('LiveChat API is running');
