@@ -2,6 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Prisma engines on Alpine require OpenSSL runtime libraries.
+RUN apk add --no-cache openssl
+
 # Install dependencies first for better caching
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -17,6 +20,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Runtime dependency for Prisma schema/query engines.
+RUN apk add --no-cache openssl
+
 # Copy built assets and dependencies
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
@@ -27,4 +33,4 @@ COPY --from=builder /app/package*.json ./
 ENV NODE_ENV="production"
 
 # Apply DB migrations and start the server
-CMD ["sh", "-c", "until ./node_modules/.bin/prisma migrate deploy; do echo 'Waiting for database...'; sleep 3; done; node dist/index.js"]
+CMD ["sh", "-c", "max=30; i=0; until ./node_modules/.bin/prisma migrate deploy; do i=$((i+1)); if [ \"$i\" -ge \"$max\" ]; then echo 'Migration failed after 30 attempts'; exit 1; fi; echo 'Waiting for database...'; sleep 3; done; node dist/index.js"]
