@@ -27,10 +27,11 @@ RUN apk add --no-cache openssl
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
 COPY --from=builder /app/package*.json ./
 
 # Set environment to production
 ENV NODE_ENV="production"
 
 # Apply DB migrations and start the server
-CMD ["sh", "-c", "max=30; i=0; until ./node_modules/.bin/prisma migrate deploy; do i=$((i+1)); if [ \"$i\" -ge \"$max\" ]; then echo 'Migration failed after 30 attempts'; exit 1; fi; echo 'Waiting for database...'; sleep 3; done; node dist/index.js"]
+CMD ["sh", "./docker-entrypoint.sh"]
