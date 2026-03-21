@@ -1,37 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
-import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
-import { getProjectMembers, sendMessage as sendMessageAPI, updateConversation, uploadFile } from '../api';
+import { sendMessage as sendMessageAPI, uploadFile } from '../api';
 import QuickRepliesPanel from './QuickRepliesPanel';
 
-interface ProjectMember {
-    user: {
-        id: string;
-        name: string;
-        email: string;
-    };
-}
-
 export default function ChatWindow() {
-    const { user } = useAuthStore();
-    const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping, fetchConversations } = useChatStore();
+    const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping } = useChatStore();
     const [text, setText] = useState('');
     const typingTimeoutRef = useRef<any>(null);
     const [sending, setSending] = useState(false);
     const [showQuickReplies, setShowQuickReplies] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
-    const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
-    const [assignmentBusy, setAssignmentBusy] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const activeConversation = conversations.find(c => c.id === activeConversationId);
-    const isUnassignedOpen = activeConversation?.status === 'OPEN' && !activeConversation?.operatorId;
     const canSendMessage = !!activeConversationId && activeConversation?.status === 'OPEN';
-
-    const waitingMinutes = activeConversation && activeConversation.status === 'OPEN' && (activeConversation.operatorReplyCount || 0) === 0
-        ? Math.floor((Date.now() - new Date(activeConversation.createdAt).getTime()) / 60000)
-        : null;
 
     useEffect(() => {
         // Instant scroll when switching conversation
@@ -42,17 +25,6 @@ export default function ChatWindow() {
         // Smooth scroll for new messages (incoming or outgoing)
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-
-    useEffect(() => {
-        if (!activeConversation?.projectId) {
-            setProjectMembers([]);
-            return;
-        }
-
-        getProjectMembers(activeConversation.projectId)
-            .then(({ data }) => setProjectMembers(data))
-            .catch((err) => console.error('Failed to load project members:', err));
-    }, [activeConversation?.projectId]);
 
     const handleSend = async () => {
         if (!text.trim() || !activeConversationId || !canSendMessage) return;
@@ -113,20 +85,6 @@ export default function ChatWindow() {
         }, 2000);
     };
 
-    const handleAssignConversation = async (nextOperatorId: string) => {
-        if (!activeConversationId || !nextOperatorId) return;
-
-        setAssignmentBusy(true);
-        try {
-            await updateConversation(activeConversationId, { operatorId: nextOperatorId });
-            await fetchConversations();
-        } catch (err) {
-            console.error('Failed to update assignee:', err);
-        } finally {
-            setAssignmentBusy(false);
-        }
-    };
-
     if (!activeConversationId) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
@@ -164,55 +122,9 @@ export default function ChatWindow() {
                     <h3 className="text-sm font-semibold text-text-primary">
                         {activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель'}
                     </h3>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <p className="text-xs text-text-muted">{activeConversation?.project.name}</p>
-                        {activeConversation?.operator ? (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                                Ответственный: {activeConversation.operator.name}
-                            </span>
-                        ) : (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-success/15 text-success">
-                                В очереди
-                            </span>
-                        )}
-                        {waitingMinutes !== null && (
-                            <span className={`text-[11px] px-2 py-0.5 rounded-full ${waitingMinutes < 5
-                                ? 'bg-primary/10 text-primary'
-                                : waitingMinutes < 10
-                                    ? 'bg-amber-500/15 text-amber-600'
-                                    : 'bg-danger/15 text-danger'
-                                }`}>
-                                Ждёт {waitingMinutes}м
-                            </span>
-                        )}
-                    </div>
+                    <p className="text-xs text-text-muted mt-0.5">{activeConversation?.project.name}</p>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
-                    {isUnassignedOpen && user?.id && (
-                        <button
-                            onClick={() => handleAssignConversation(user.id)}
-                            disabled={assignmentBusy}
-                            className="px-3 py-2 rounded-lg bg-primary text-white text-xs font-semibold border-none cursor-pointer disabled:opacity-50"
-                        >
-                            Взять чат
-                        </button>
-                    )}
-                    {activeConversation?.status === 'OPEN' && projectMembers.length > 0 && (
-                        <select
-                            value={activeConversation.operatorId || ''}
-                            onChange={(e) => handleAssignConversation(e.target.value)}
-                            disabled={assignmentBusy}
-                            className="px-3 py-2 rounded-lg bg-surface border border-border text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        >
-                            <option value="">Без ответственного</option>
-                            {projectMembers.map((member) => (
-                                <option key={member.user.id} value={member.user.id}>
-                                    {member.user.name}
-                                    {member.user.id === user?.id ? ' (я)' : ''}
-                                </option>
-                            ))}
-                        </select>
-                    )}
                     <span className={`text-xs px-2 py-1 rounded-full ${activeConversation?.status === 'OPEN'
                         ? 'bg-success/15 text-success'
                         : 'bg-text-muted/15 text-text-muted'
