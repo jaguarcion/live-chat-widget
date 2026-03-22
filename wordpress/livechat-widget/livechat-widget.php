@@ -26,6 +26,9 @@ add_action( 'admin_menu', 'livechat_widget_add_admin_menu' );
 // 2. Register Settings
 function livechat_widget_settings_init() {
     register_setting( 'livechatWidgetPlugin', 'livechat_widget_settings' );
+    register_setting( 'livechatWidgetPlugin', 'livechat_widget_url', [
+        'sanitize_callback' => 'esc_url_raw',
+    ] );
 
     add_settings_section(
         'livechat_widget_plugin_page_section',
@@ -41,6 +44,14 @@ function livechat_widget_settings_init() {
         'livechatWidgetPlugin',
         'livechat_widget_plugin_page_section'
     );
+
+    add_settings_field(
+        'livechat_widget_url',
+        __( 'Widget URL', 'livechat-widget' ),
+        'livechat_widget_url_render',
+        'livechatWidgetPlugin',
+        'livechat_widget_plugin_page_section'
+    );
 }
 add_action( 'admin_init', 'livechat_widget_settings_init' );
 
@@ -50,6 +61,14 @@ function livechat_widget_project_id_render() {
     ?>
     <input type='text' name='livechat_widget_settings[livechat_widget_project_id]' value='<?php echo esc_attr( $project_id ); ?>' class='regular-text' placeholder='e.g. prj_123abc' />
     <p class="description"><?php _e( 'Enter your LiveChat Project ID. You can find this in your LiveChat dashboard under Installation.', 'livechat-widget' ); ?></p>
+    <?php
+}
+
+function livechat_widget_url_render() {
+    $url = get_option( 'livechat_widget_url', '' );
+    ?>
+    <input type='url' name='livechat_widget_url' value='<?php echo esc_attr( $url ); ?>' class='regular-text' placeholder='https://chat.cdk-gpt.ru/widget' />
+    <p class="description"><?php _e( 'Base URL of your LiveChat widget (without trailing slash). Example: https://chat.cdk-gpt.ru/widget', 'livechat-widget' ); ?></p>
     <?php
 }
 
@@ -81,11 +100,16 @@ function livechat_widget_inject_script() {
         // In a production environment, the SRC domain should be configurable or point to the production server.
         // For this implementation, we assume the script is hosted at a domain or IP (replace YOUR_WIDGET_HOST as needed).
         // Since it's a plugin, the user usually points it to the hosted SaaS.
+        $widget_url = get_option( 'livechat_widget_url', '' );
+        if ( empty( $widget_url ) ) {
+            return; // Widget URL not configured
+        }
+        $widget_js = esc_url( rtrim( $widget_url, '/' ) . '/widget.js' );
         echo "<!-- LiveChat Widget -->\n";
         echo "<script>\n";
         echo "  window.LiveChat = { projectId: '" . esc_js( $project_id ) . "' };\n";
         echo "</script>\n";
-        echo "<script src='http://127.0.0.1:3000/widget.js' async></script>\n";
+        echo "<script src='" . $widget_js . "' async crossorigin='anonymous'></script>\n";
         echo "<!-- End LiveChat Widget -->\n";
     }
 }
