@@ -26,13 +26,33 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 4000;
 
+const normalizeOrigin = (raw?: string): string | null => {
+  if (!raw) return null;
+
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
+};
+
 const configuredOrigins = parseOriginAllowlist(process.env.CORS_ORIGINS);
+const envOrigins = [
+  normalizeOrigin(process.env.FRONTEND_URL),
+  normalizeOrigin(process.env.WIDGET_URL),
+  normalizeOrigin(process.env.MEDIA_BASE_URL),
+].filter((origin): origin is string => Boolean(origin));
 const defaultOrigins = ['http://localhost:5173', 'http://localhost:4173', 'http://localhost:3000'];
-const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : defaultOrigins;
+const allowedOrigins = Array.from(new Set([
+  ...(configuredOrigins.length > 0 ? configuredOrigins : []),
+  ...envOrigins,
+  ...defaultOrigins,
+]));
 
 const isAllowedOrigin = (origin?: string): boolean => {
   if (!origin) return true;
-  return allowedOrigins.includes(origin);
+  const normalized = normalizeOrigin(origin);
+  return normalized ? allowedOrigins.includes(normalized) : false;
 };
 
 app.use(cors({
@@ -86,6 +106,12 @@ app.get('/', (req, res) => {
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('SERVER ERROR:', err);
+
+  if (err?.message === 'CORS origin not allowed') {
+    res.status(403).json({ error: 'CORS origin not allowed' });
+    return;
+  }
+
   res.status(500).json({ error: 'Internal Server Error', details: err.message });
 });
 
