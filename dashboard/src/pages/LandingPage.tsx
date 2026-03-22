@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
 
 const logos = [
     'Nudie Jeans',
@@ -109,6 +110,23 @@ const faqs = [
 ];
 
 export default function LandingPage() {
+    useEffect(() => {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    (entry.target as HTMLElement).style.opacity = '1';
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -100px 0px' });
+
+        document.querySelectorAll('[data-animate]').forEach((el) => {
+            (el as HTMLElement).style.opacity = '0';
+            observer.observe(el);
+        });
+
+        return () => observer.disconnect();
+    }, []);
+
     return (
         <div className="landing-shell w-full">
             <div className="landing-orb landing-orb-a" aria-hidden="true" />
@@ -240,8 +258,15 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                             <h2>Подключайте ваш текущий стек без миграции процессов</h2>
                         </div>
                         <div className="landing-integrations-grid">
-                            {integrations.map((item) => (
-                                <span key={item}>{item}</span>
+                            {integrations.map((item, index) => (
+                                <span 
+                                    key={item}
+                                    data-animate
+                                    id={`integration-${index}`}
+                                    style={{
+                                        transition: `all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${(index % 6) * 0.05}s`,
+                                    }}
+                                >{item}</span>
                             ))}
                         </div>
                     </div>
@@ -256,7 +281,15 @@ window.LiveChat = { projectId: "PROJECT_ID" };
 
                         <div className="landing-feature-grid">
                             {features.map((feature, index) => (
-                                <article key={feature.title} className={`landing-card landing-delay-${Math.min(index + 1, 3)}`}>
+                                <article 
+                                    key={feature.title} 
+                                    className={`landing-card landing-delay-${Math.min(index + 1, 3)}`}
+                                    data-animate
+                                    id={`feature-${index}`}
+                                    style={{
+                                        transition: `all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s`,
+                                    }}
+                                >
                                     <span className="landing-chip">{feature.badge}</span>
                                     <h3>{feature.title}</h3>
                                     <p>{feature.text}</p>
@@ -269,8 +302,16 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                 <section className="landing-section landing-section-soft">
                     <div className="landing-container">
                         <div className="landing-stats-grid">
-                            {stats.map((item) => (
-                                <article key={item.label} className="landing-stat-card">
+                            {stats.map((item, index) => (
+                                <article 
+                                    key={item.label} 
+                                    className="landing-stat-card"
+                                    data-animate
+                                    id={`stat-${index}`}
+                                    style={{
+                                        transition: `all 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.08}s`,
+                                    }}
+                                >
                                     <h3>{item.value}</h3>
                                     <p>{item.label}</p>
                                 </article>
@@ -287,8 +328,16 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                         </div>
 
                         <div className="landing-steps">
-                            {steps.map((step) => (
-                                <article key={step.id} className="landing-step-card">
+                            {steps.map((step, index) => (
+                                <article 
+                                    key={step.id} 
+                                    className="landing-step-card"
+                                    data-animate
+                                    id={`step-${step.id}`}
+                                    style={{
+                                        transition: `all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s`,
+                                    }}
+                                >
                                     <span>{step.id}</span>
                                     <div>
                                         <h3>{step.title}</h3>
@@ -308,7 +357,7 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                         </div>
 
                         <div className="landing-pricing-grid">
-                            <article className="landing-price-card">
+                            <article className="landing-price-card" data-animate id="price-0">
                                 <p className="landing-price-title">Starter</p>
                                 <h3>$0<span>/мес</span></h3>
                                 <p>Для пилота и первых проектов</p>
@@ -319,7 +368,7 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                                 </ul>
                             </article>
 
-                            <article className="landing-price-card landing-price-main">
+                            <article className="landing-price-card landing-price-main" data-animate id="price-1">
                                 <p className="landing-price-title">Growth</p>
                                 <h3>$29<span>/мес</span></h3>
                                 <p>Для растущих команд поддержки</p>
@@ -331,7 +380,7 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                                 <Link to="/login" className="landing-btn landing-btn-solid w-full">Начать trial</Link>
                             </article>
 
-                            <article className="landing-price-card">
+                            <article className="landing-price-card" data-animate id="price-2">
                                 <p className="landing-price-title">Scale</p>
                                 <h3>Custom</h3>
                                 <p>Для high-load и enterprise-процессов</p>
@@ -353,8 +402,16 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                         </div>
 
                         <div className="landing-faq-grid">
-                            {faqs.map((faq) => (
-                                <article key={faq.q} className="landing-faq-card">
+                            {faqs.map((faq, index) => (
+                                <article 
+                                    key={faq.q} 
+                                    className="landing-faq-card"
+                                    data-animate
+                                    id={`faq-${index}`}
+                                    style={{
+                                        transition: `all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.08}s`,
+                                    }}
+                                >
                                     <h3>{faq.q}</h3>
                                     <p>{faq.a}</p>
                                 </article>
@@ -364,7 +421,7 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                 </section>
 
                 <section className="landing-final-cta">
-                    <div className="landing-container landing-final-box">
+                    <div className="landing-container landing-final-box" data-animate id="final-cta">
                         <h2>Готовы превратить чат в источник выручки?</h2>
                         <p>
                             Запустите виджет сегодня, подключите команду и получите первые диалоги уже в этот же день.
