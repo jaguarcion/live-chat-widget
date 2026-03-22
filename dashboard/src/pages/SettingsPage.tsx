@@ -1518,7 +1518,7 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                                     {`<script>
   window.LiveChat = { projectId: "${selectedProjectId}" };
 </script>
-<script src="https://YOUR_DOMAIN/widget.js" async></script>`}
+<script src="https://YOUR_DOMAIN/widget/widget.js" async></script>`}
                                 </pre>
                                 <p className="text-xs text-text-muted mt-2">Вставьте этот код перед закрывающим тегом <code className="text-primary">&lt;/body&gt;</code> на каждой странице сайта</p>
                             </SectionBlock>
