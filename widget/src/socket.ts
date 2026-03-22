@@ -1,7 +1,9 @@
 import { io, Socket } from 'socket.io-client';
 import type { MessageData } from './api';
 
-const SOCKET_URL = (window as any).__LIVECHAT_WS__ || import.meta.env.VITE_WS_URL || 'http://localhost:3001';
+function getSocketUrl(): string {
+    return (window as any).__LIVECHAT_WS__ || import.meta.env.VITE_WS_URL || 'http://localhost:3001';
+}
 
 function createSessionId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -26,7 +28,7 @@ export class ChatSocket {
 
     constructor() {
         this.sessionId = getSessionId();
-        this.socket = io(SOCKET_URL, {
+        this.socket = io(getSocketUrl(), {
             transports: ['websocket', 'polling'],
             autoConnect: false,
         });

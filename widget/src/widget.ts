@@ -1,4 +1,4 @@
-import { initWidget, getHistory, checkOnline, type MessageData } from './api';
+import { initWidget, getHistory, checkOnline, getApiBase, type MessageData } from './api';
 import { ChatSocket } from './socket';
 import { widgetStyles } from './styles';
 
@@ -480,8 +480,7 @@ export class LiveChatWidget {
             formData.append('file', file);
 
             try {
-                const API_BASE = (window as any).__LIVECHAT_API__ || 'http://localhost:4001/api';
-                const res = await fetch(`${API_BASE}/widget/upload`, {
+                const res = await fetch(`${getApiBase()}/widget/upload`, {
                     method: 'POST',
                     body: formData
                 });
@@ -736,8 +735,7 @@ export class LiveChatWidget {
                     }
                 }
 
-                const API_BASE = (window as any).__LIVECHAT_API__ || 'http://localhost:4001/api';
-                await fetch(`${API_BASE}/widget/visitor`, {
+                await fetch(`${getApiBase()}/widget/visitor`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

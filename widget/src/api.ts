@@ -1,4 +1,6 @@
-const API_BASE = (window as any).__LIVECHAT_API__ || (import.meta.env.VITE_API_URL || 'http://localhost:3001') + '/api';
+export function getApiBase(): string {
+    return (window as any).__LIVECHAT_API__ || (import.meta.env.VITE_API_URL || 'http://localhost:3001') + '/api';
+}
 
 export interface InitResponse {
     project: { id: string; name: string };
@@ -28,7 +30,7 @@ export async function initWidget(
     visitorId: string | null,
     metadata: WidgetMetadata
 ): Promise<InitResponse> {
-    const res = await fetch(`${API_BASE}/widget/init`, {
+    const res = await fetch(`${getApiBase()}/widget/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId, visitorId, metadata }),
@@ -54,7 +56,7 @@ export interface MessageData {
 }
 
 export async function getHistory(conversationId: string): Promise<MessageData[]> {
-    const res = await fetch(`${API_BASE}/widget/history/${conversationId}`);
+    const res = await fetch(`${getApiBase()}/widget/history/${conversationId}`);
     if (!res.ok) throw new Error('History fetch failed');
     return res.json();
 }
@@ -67,7 +69,7 @@ export interface OnlineStatus {
 }
 
 export async function checkOnline(projectId: string): Promise<OnlineStatus> {
-    const res = await fetch(`${API_BASE}/settings/${projectId}/online`);
+    const res = await fetch(`${getApiBase()}/settings/${projectId}/online`);
     if (!res.ok) return { online: true };
     return res.json();
 }
