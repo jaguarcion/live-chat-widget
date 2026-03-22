@@ -441,6 +441,9 @@ window.LiveChat = { projectId: "PROJECT_ID" };
                         <a href="#features">Features</a>
                         <a href="#pricing">Pricing</a>
                         <a href="#faq">FAQ</a>
+                        <a href="/landing2" style={{ opacity: 0.7, fontSize: '0.9rem' }}>
+                            v2 дизайн »
+                        </a>
                     </div>
                 </div>
             </footer>

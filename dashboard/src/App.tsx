@@ -5,6 +5,8 @@ import { useThemeStore } from './store/themeStore';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import LandingPage from './pages/LandingPage';
+import LandingPage2 from './pages/LandingPage2';
+import './landing2.css';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitializing } = useAuthStore();
@@ -40,6 +42,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/landing2" element={<LandingPage2 />} />
         <Route path="/login" element={<LoginPage />} />
         <Route
           path="/app"
