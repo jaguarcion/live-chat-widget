@@ -7,6 +7,7 @@ import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
 import VisitorInfo from '../components/VisitorInfo';
 import SettingsPage from './SettingsPage';
+import SearchPanel from '../components/SearchPanel';
 
 export default function DashboardPage() {
     const { token } = useAuthStore();
@@ -15,7 +16,7 @@ export default function DashboardPage() {
     const [showCreateProject, setShowCreateProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [creating, setCreating] = useState(false);
-    const [activeView, setActiveView] = useState<'chat' | 'settings' | 'dialogs' | 'channels'>('chat');
+    const [activeView, setActiveView] = useState<'chat' | 'settings' | 'dialogs' | 'channels' | 'search'>('chat');
 
     useEffect(() => {
         loadProjects();
@@ -68,6 +69,20 @@ export default function DashboardPage() {
 
             {activeView === 'settings' ? (
                 <SettingsPage initialSection={'appearance'} />
+            ) : activeView === 'search' ? (
+                <div className="flex flex-1 min-w-0">
+                    <div className="w-80 flex-shrink-0 border-r border-border bg-surface-secondary flex flex-col">
+                        <SearchPanel onOpenConversation={() => setActiveView('chat')} />
+                    </div>
+                    <div className="flex-1 flex flex-col min-w-0">
+                        <ChatWindow />
+                    </div>
+                    {activeConversationId && activeConversation && (
+                        <div className="w-72 flex-shrink-0 border-l border-border bg-surface-secondary">
+                            <VisitorInfo conversation={activeConversation} />
+                        </div>
+                    )}
+                </div>
             ) : (
                 <div className="flex flex-1 min-w-0">
                     {/* Conversations list */}

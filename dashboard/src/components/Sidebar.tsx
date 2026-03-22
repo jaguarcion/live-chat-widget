@@ -5,8 +5,8 @@ import { useThemeStore } from '../store/themeStore';
 import { useNavigate } from 'react-router-dom';
 
 interface SidebarProps {
-    activeView: 'chat' | 'settings' | 'dialogs' | 'channels';
-    onViewChange: (view: 'chat' | 'settings' | 'dialogs' | 'channels') => void;
+    activeView: 'chat' | 'settings' | 'dialogs' | 'channels' | 'search';
+    onViewChange: (view: 'chat' | 'settings' | 'dialogs' | 'channels' | 'search') => void;
 }
 
 export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
@@ -166,6 +166,15 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                     <div className="px-3 py-4">
                         <div className="text-[11px] font-bold text-text-muted mb-3 uppercase tracking-wider px-2">Диалоги</div>
                         <div className="space-y-1 text-[15px]">
+                            <div
+                                onClick={() => onViewChange('search')}
+                                className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${activeView === 'search' ? 'bg-primary/10 text-primary font-semibold' : 'text-text-secondary hover:bg-surface-secondary transition-colors font-semibold'}`}
+                            >
+                                <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                Поиск
+                            </div>
                             <div
                                 onClick={() => onViewChange('chat')}
                                 className={`flex items-center justify-between px-2 py-2 rounded-lg cursor-pointer transition-colors ${activeView === 'chat' ? 'bg-primary/10 text-primary font-semibold' : 'text-text-secondary hover:bg-surface-secondary transition-colors font-semibold'}`}

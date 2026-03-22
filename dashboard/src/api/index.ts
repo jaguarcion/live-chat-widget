@@ -95,6 +95,9 @@ export const exportAutoActionTriggersCsv = (
     responseType: 'blob'
 });
 
+// Search
+export const searchConversations = (q: string) => api.get('/conversations/search', { params: { q } });
+
 // Webhooks
 export const getWebhooks = (projectId: string) => api.get(`/webhooks/${projectId}`);
 export const createWebhook = (projectId: string, data: any) => api.post(`/webhooks/${projectId}`, data);

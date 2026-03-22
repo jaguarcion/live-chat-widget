@@ -300,3 +300,72 @@ export const markAsRead = async (req: AuthRequest, res: Response): Promise<void>
     }
 };
 
+export const searchConversations = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const q = (req.query.q as string || '').trim();
+        if (!q) { res.json({ visitors: [], messages: [] }); return; }
+
+        const memberships = await prisma.projectMember.findMany({
+            where: { userId },
+            select: { projectId: true }
+        });
+        const projectIds = memberships.map((m: { projectId: string }) => m.projectId);
+
+        // Search visitors (by name or email) within accessible projects
+        const visitorConversations = await prisma.conversation.findMany({
+            where: {
+                projectId: { in: projectIds },
+                visitor: {
+                    OR: [
+                        { name: { contains: q } },
+                        { email: { contains: q } },
+                    ]
+                }
+            },
+            include: {
+                visitor: true,
+                project: { select: { id: true, name: true } },
+                messages: { orderBy: { createdAt: 'desc' }, take: 1 }
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: 30
+        });
+
+        // Search messages by text within accessible projects
+        const messageHits = await prisma.message.findMany({
+            where: {
+                text: { contains: q },
+                conversation: { projectId: { in: projectIds } }
+            },
+            include: {
+                conversation: {
+                    include: {
+                        visitor: true,
+                        project: { select: { id: true, name: true } },
+                        messages: { orderBy: { createdAt: 'desc' }, take: 1 }
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 30
+        });
+
+        res.json({
+            visitors: visitorConversations,
+            messages: messageHits.map((m: any) => ({
+                messageId: m.id,
+                text: m.text,
+                sender: m.sender,
+                createdAt: m.createdAt,
+                conversation: m.conversation
+            }))
+        });
+    } catch (error) {
+        console.error('Search error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
