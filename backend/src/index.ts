@@ -36,6 +36,13 @@ const normalizeOrigin = (raw?: string): string | null => {
   }
 };
 
+const isPublicOrigin = (origin?: string): boolean => {
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return false;
+
+  return normalized.startsWith('http://') || normalized.startsWith('https://');
+};
+
 const configuredOrigins = parseOriginAllowlist(process.env.CORS_ORIGINS);
 const envOrigins = [
   normalizeOrigin(process.env.FRONTEND_URL),
@@ -55,17 +62,37 @@ const isAllowedOrigin = (origin?: string): boolean => {
   return normalized ? allowedOrigins.includes(normalized) : false;
 };
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-      return;
-    }
+const isPublicApiRequest = (req: express.Request): boolean => {
+  if (req.path.startsWith('/api/widget')) {
+    return true;
+  }
 
-    callback(new Error('CORS origin not allowed'));
-  },
-  credentials: true,
-}));
+  return /^\/api\/settings\/[^/]+\/online$/.test(req.path);
+};
+
+app.use((req, res, next) => {
+  const requestOrigin = req.headers.origin;
+  const allowPublicOrigin = isPublicApiRequest(req) && (!requestOrigin || isPublicOrigin(requestOrigin));
+
+  const middleware = cors({
+    origin: (origin, callback) => {
+      if (allowPublicOrigin) {
+        callback(null, true);
+        return;
+      }
+
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('CORS origin not allowed'));
+    },
+    credentials: !allowPublicOrigin,
+  });
+
+  middleware(req, res, next);
+});
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -119,7 +146,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) {
+      if (!origin || isAllowedOrigin(origin) || isPublicOrigin(origin)) {
         callback(null, true);
         return;
       }
