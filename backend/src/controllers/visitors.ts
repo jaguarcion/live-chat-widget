@@ -1,12 +1,19 @@
 import { Response } from 'express';
 import { prisma } from '../db';
 import { AuthRequest } from '../middlewares/auth';
+import { hasVisitorAccess } from '../services/accessControl';
 
 // Update visitor notes
 export const updateVisitorNotes = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
         const { id } = req.params;
         const { notes, email, name } = req.body;
+
+        const canAccessVisitor = await hasVisitorAccess(userId, id);
+        if (!canAccessVisitor) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         const data: any = {};
         if (notes !== undefined) data.notes = notes;
@@ -28,7 +35,12 @@ export const updateVisitorNotes = async (req: AuthRequest, res: Response): Promi
 // Get visitor by ID
 export const getVisitor = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
         const { id } = req.params;
+        const canAccessVisitor = await hasVisitorAccess(userId, id);
+        if (!canAccessVisitor) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         const visitor = await prisma.visitor.findUnique({
             where: { id },
@@ -59,7 +71,12 @@ export const getVisitor = async (req: AuthRequest, res: Response): Promise<void>
 // Get visitor's recent page views
 export const getVisitorPages = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
         const { id } = req.params;
+        const canAccessVisitor = await hasVisitorAccess(userId, id);
+        if (!canAccessVisitor) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         const pages = await prisma.pageView.findMany({
             where: { visitorId: id },

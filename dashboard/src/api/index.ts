@@ -1,11 +1,20 @@
 import axios from 'axios';
 
+let authToken: string | null = null;
+
+export const setAuthToken = (token: string | null) => {
+    authToken = token;
+};
+
+export const getAuthToken = (): string | null => authToken;
+
 const api = axios.create({
     baseURL: '/api',
+    withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
+    const token = getAuthToken();
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
@@ -20,6 +29,9 @@ export const registerAPI = (email: string, password: string, name: string) =>
     api.post('/auth/register', { email, password, name });
 
 export const authMeAPI = () => api.get('/auth/me');
+export const logoutAPI = () => api.post('/auth/logout');
+export const logoutAllAPI = () => api.post('/auth/logout-all');
+export const refreshAPI = () => api.post('/auth/refresh');
 
 // Projects & Members
 export const getProjects = () => api.get('/projects');
@@ -42,7 +54,7 @@ export const sendMessage = (conversationId: string, text: string, type: string =
 export const uploadFile = (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post('/widget/upload', formData);
+    return api.post('/upload', formData);
 };
 export const updateConversation = (conversationId: string, data: { status?: string; operatorId?: string }) =>
     api.patch(`/conversations/${conversationId}`, data);

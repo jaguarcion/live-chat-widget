@@ -28,9 +28,24 @@ services:
       - PORT=3001
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
       - WIDGET_URL=${WIDGET_URL:-http://localhost:5174}
+      - MEDIA_BASE_URL=${MEDIA_BASE_URL:-http://localhost:8080}
+      - ENFORCE_MEDIA_ORIGIN=${ENFORCE_MEDIA_ORIGIN:-true}
     depends_on:
       mysql:
         condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+
+  media:
+    build:
+      context: ./media
+    restart: always
+    ports:
+      - "8080:80"
+    volumes:
+      - uploads_data:/var/media/uploads:ro
+    depends_on:
+      - backend
 
   dashboard:
     build:
@@ -59,3 +74,4 @@ services:
 
 volumes:
   mysql_data:
+  uploads_data:

@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import helmet from 'helmet';
+import cookieParser = require('cookie-parser');
 import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
 import widgetRoutes from './routes/widget';
@@ -14,17 +16,55 @@ import presenceRoutes from './routes/presence';
 import memberRoutes from './routes/members';
 import webhookRoutes from './routes/webhooks';
 import autoActionRoutes from './routes/autoActions';
+import uploadRoutes from './routes/upload';
 import { setupSockets } from './sockets';
 import { setIO } from './socketInstance';
+import { parseOriginAllowlist } from './config/security';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 4000;
 
-app.use(cors());
+const configuredOrigins = parseOriginAllowlist(process.env.CORS_ORIGINS);
+const defaultOrigins = ['http://localhost:5173', 'http://localhost:4173', 'http://localhost:3000'];
+const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : defaultOrigins;
+
+const isAllowedOrigin = (origin?: string): boolean => {
+  if (!origin) return true;
+  return allowedOrigins.includes(origin);
+};
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('CORS origin not allowed'));
+  },
+  credentials: true,
+}));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'none'"],
+      objectSrc: ["'none'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'"],
+    },
+  },
+  frameguard: { action: 'deny' },
+  referrerPolicy: { policy: 'no-referrer' },
+  xPoweredBy: false,
+}));
 app.use(express.json());
-app.use('/uploads', express.static('uploads'));
+app.use(cookieParser() as unknown as express.RequestHandler);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
@@ -37,6 +77,7 @@ app.use('/api/presence', presenceRoutes);
 app.use('/api/projects', memberRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/auto-actions', autoActionRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.get('/', (req, res) => {
   res.send('LiveChat API is running');
@@ -51,7 +92,14 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Socket origin not allowed'));
+    },
   },
 });
 

@@ -8,7 +8,8 @@ export type EventType =
     | 'CONVERSATION_REOPENED'
     | 'VISITOR_CONNECTED'
     | 'OPERATOR_CONNECTED'
-    | 'OPERATOR_DISCONNECTED';
+    | 'OPERATOR_DISCONNECTED'
+    | 'UPLOAD_QUOTA_EXCEEDED';
 
 export const logEvent = async (
     projectId: string,

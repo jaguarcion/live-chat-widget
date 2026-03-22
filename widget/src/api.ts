@@ -6,6 +6,7 @@ export interface InitResponse {
     project: { id: string; name: string };
     visitor: { id: string };
     conversation: { id: string };
+    widgetToken: string;
     settings?: any;
 }
 
@@ -55,8 +56,12 @@ export interface MessageData {
     createdAt: string;
 }
 
-export async function getHistory(conversationId: string): Promise<MessageData[]> {
-    const res = await fetch(`${getApiBase()}/widget/history/${conversationId}`);
+export async function getHistory(conversationId: string, widgetToken: string): Promise<MessageData[]> {
+    const res = await fetch(`${getApiBase()}/widget/history/${conversationId}`, {
+        headers: {
+            Authorization: `Bearer ${widgetToken}`,
+        },
+    });
     if (!res.ok) throw new Error('History fetch failed');
     return res.json();
 }

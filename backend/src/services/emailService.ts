@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { prisma } from '../db';
+import { decryptSecret } from './secretCrypto';
 
 export const sendOfflineNotification = async (
     projectId: string,
@@ -18,6 +19,12 @@ export const sendOfflineNotification = async (
             return;
         }
 
+        const smtpPassword = decryptSecret(settings.smtpPassword);
+        if (!smtpPassword) {
+            console.warn('Email notification skipped: SMTP password decrypt failed for project', projectId);
+            return;
+        }
+
         // Find project operators to notify
         const members = await prisma.projectMember.findMany({
             where: { projectId },
@@ -32,7 +39,7 @@ export const sendOfflineNotification = async (
             secure: (settings.smtpPort || 587) === 465,
             auth: {
                 user: settings.smtpUser,
-                pass: settings.smtpPassword,
+                pass: smtpPassword,
             },
         });
 
@@ -83,13 +90,18 @@ export const sendVisitorOfflineNotification = async (
             return;
         }
 
+        const smtpPassword = decryptSecret(settings.smtpPassword);
+        if (!smtpPassword) {
+            return;
+        }
+
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
             port: settings.smtpPort || 587,
             secure: (settings.smtpPort || 587) === 465,
             auth: {
                 user: settings.smtpUser,
-                pass: settings.smtpPassword,
+                pass: smtpPassword,
             },
         });
 

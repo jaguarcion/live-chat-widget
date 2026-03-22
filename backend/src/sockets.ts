@@ -1,13 +1,29 @@
 import { Server, Socket } from 'socket.io';
 import { prisma } from './db';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
-import jwt from 'jsonwebtoken';
 import { logEvent } from './services/eventLogger';
 import { sendOfflineNotification, sendVisitorOfflineNotification } from './services/emailService';
 import { triggerWebhook } from './services/webhookService';
 import { evaluateAutoActionsForPage } from './services/autoActions';
+import { getConversationProjectId, hasProjectAccess } from './services/accessControl';
+import { verifyWidgetSession } from './services/widgetSession';
+import { verifyAccessToken } from './services/authToken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const socketRateBuckets = new Map<string, number[]>();
+
+const allowSocketEvent = (key: string, windowMs: number, max: number): boolean => {
+    const now = Date.now();
+    const timestamps = socketRateBuckets.get(key) || [];
+    const fresh = timestamps.filter(ts => now - ts < windowMs);
+    if (fresh.length >= max) {
+        socketRateBuckets.set(key, fresh);
+        return false;
+    }
+
+    fresh.push(now);
+    socketRateBuckets.set(key, fresh);
+    return true;
+};
 
 export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>) => {
     io.on('connection', (socket: Socket) => {
@@ -16,40 +32,48 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
         // Operator Authentication
         socket.on('operator_connect', async (data: { token: string; projectIds?: string[]; status?: string }) => {
             try {
-                const payload = jwt.verify(data.token, JWT_SECRET) as { userId: string; role: string };
+                const payload = await verifyAccessToken(data.token);
+                if (!payload) {
+                    socket.emit('error', 'Authentication failed');
+                    return;
+                }
+
                 socket.data.userId = payload.userId;
                 socket.data.role = payload.role;
                 socket.join(`operator_${payload.userId}`);
 
                 const isOnline = data.status ? data.status === 'online' : true;
+                const memberships = await prisma.projectMember.findMany({
+                    where: { userId: payload.userId },
+                    select: { projectId: true }
+                });
+                const allowedProjectIds = memberships.map(m => m.projectId);
 
-                // Join rooms for all projects the operator belongs to
-                if (data.projectIds && Array.isArray(data.projectIds)) {
-                    for (const projectId of data.projectIds) {
-                        socket.join(`project_${projectId}`);
-                        console.log(`Operator ${payload.userId} joined project_${projectId}`);
+                for (const projectId of allowedProjectIds) {
+                    socket.join(`project_${projectId}`);
+                    console.log(`Operator ${payload.userId} joined project_${projectId}`);
 
-                        // Update OperatorPresence
-                        await prisma.operatorPresence.upsert({
-                            where: { userId_projectId: { userId: payload.userId, projectId } },
-                            create: {
-                                userId: payload.userId,
-                                projectId,
-                                socketId: socket.id,
-                                isOnline,
-                            },
-                            update: {
-                                socketId: socket.id,
-                                isOnline,
-                                lastSeenAt: new Date(),
-                            }
-                        });
+                    // Update OperatorPresence
+                    await prisma.operatorPresence.upsert({
+                        where: { userId_projectId: { userId: payload.userId, projectId } },
+                        create: {
+                            userId: payload.userId,
+                            projectId,
+                            socketId: socket.id,
+                            isOnline,
+                        },
+                        update: {
+                            socketId: socket.id,
+                            isOnline,
+                            lastSeenAt: new Date(),
+                        }
+                    });
 
-                        logEvent(projectId, 'OPERATOR_CONNECTED', { userId: payload.userId });
-                    }
-                    socket.data.projectIds = data.projectIds;
-                } else {
-                    // Fallback to a general room if projects aren't specified
+                    logEvent(projectId, 'OPERATOR_CONNECTED', { userId: payload.userId });
+                }
+
+                socket.data.projectIds = allowedProjectIds;
+                if (allowedProjectIds.length === 0) {
                     socket.join('operators');
                 }
 
@@ -60,10 +84,22 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
         });
 
         // Visitor Connection
-        socket.on('visitor_connect', async (data: { conversationId: string; visitorId?: string; url?: string; title?: string; sessionId?: string }) => {
+        socket.on('visitor_connect', async (data: { conversationId: string; visitorId?: string; widgetToken?: string; url?: string; title?: string; sessionId?: string }) => {
+            if (!allowSocketEvent(`visitor_connect:${socket.handshake.address}`, 60_000, 30)) {
+                socket.emit('error', 'Too many connection attempts');
+                return;
+            }
+
+            const session = data.widgetToken ? verifyWidgetSession(data.widgetToken) : null;
+            if (!session || session.conversationId !== data.conversationId) {
+                socket.emit('error', 'Authentication failed');
+                return;
+            }
+
             socket.data.conversationId = data.conversationId;
-            socket.data.visitorId = data.visitorId;
+            socket.data.visitorId = session.visitorId;
             socket.data.sessionId = data.sessionId;
+            socket.data.widgetSession = session;
             socket.join(`conversation_${data.conversationId}`);
             console.log(`Visitor connected to conversation ${data.conversationId}`);
 
@@ -74,8 +110,14 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                     select: { projectId: true, visitorId: true }
                 });
                 if (conversation) {
+                    if (conversation.projectId !== session.projectId || conversation.visitorId !== session.visitorId) {
+                        socket.emit('error', 'Forbidden');
+                        socket.disconnect();
+                        return;
+                    }
+
                     socket.data.projectId = conversation.projectId;
-                    const visitorId = data.visitorId || conversation.visitorId;
+                    const visitorId = session.visitorId;
                     socket.data.visitorId = visitorId;
                     io.to(`project_${conversation.projectId}`).emit('visitor_online', {
                         conversationId: data.conversationId,
@@ -114,10 +156,40 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
             attachmentUrl?: string;
         }) => {
             try {
+                if (!allowSocketEvent(`visitor_message:${socket.data.visitorId || socket.id}`, 10_000, 12)) {
+                    socket.emit('error', 'Too many messages');
+                    return;
+                }
+
+                if (socket.data.conversationId !== data.conversationId) {
+                    socket.emit('error', 'Forbidden');
+                    return;
+                }
+
+                if (!socket.data.widgetSession) {
+                    socket.emit('error', 'Unauthorized');
+                    return;
+                }
+
                 const conversation = await prisma.conversation.findUnique({
                     where: { id: data.conversationId },
-                    select: { projectId: true }
+                    select: { projectId: true, visitorId: true }
                 });
+
+                if (!conversation) {
+                    socket.emit('error', 'Conversation not found');
+                    return;
+                }
+
+                if (socket.data.visitorId && socket.data.visitorId !== conversation.visitorId) {
+                    socket.emit('error', 'Forbidden');
+                    return;
+                }
+
+                if (socket.data.widgetSession.projectId !== conversation.projectId) {
+                    socket.emit('error', 'Forbidden');
+                    return;
+                }
 
                 const message = await prisma.message.create({
                     data: {
@@ -189,6 +261,11 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
             attachmentUrl?: string;
         }) => {
             try {
+                if (!allowSocketEvent(`operator_message:${socket.data.userId || socket.id}`, 10_000, 30)) {
+                    socket.emit('error', 'Too many messages');
+                    return;
+                }
+
                 if (!socket.data.userId) {
                     socket.emit('error', 'Unauthorized');
                     return;
@@ -198,6 +275,17 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                     where: { id: data.conversationId },
                     include: { visitor: true }
                 });
+
+                if (!conversation) {
+                    socket.emit('error', 'Conversation not found');
+                    return;
+                }
+
+                const canAccessConversation = await hasProjectAccess(socket.data.userId, conversation.projectId);
+                if (!canAccessConversation) {
+                    socket.emit('error', 'Forbidden');
+                    return;
+                }
 
                 const message = await prisma.message.create({
                     data: {
@@ -262,6 +350,18 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
             sessionId?: string;
         }) => {
             try {
+                if (!allowSocketEvent(`page_view:${socket.data.visitorId || socket.id}`, 60_000, 120)) {
+                    return;
+                }
+
+                if (!socket.data.widgetSession) {
+                    return;
+                }
+
+                if (data.visitorId !== socket.data.widgetSession.visitorId) {
+                    return;
+                }
+
                 if (data.visitorId && data.url) {
                     await prisma.pageView.create({
                         data: {
@@ -285,7 +385,12 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                             orderBy: { updatedAt: 'desc' }
                         });
 
-                    if (openConversation && openConversation.status === 'OPEN') {
+                    if (
+                        openConversation &&
+                        openConversation.status === 'OPEN' &&
+                        openConversation.projectId === socket.data.widgetSession.projectId &&
+                        openConversation.visitorId === socket.data.widgetSession.visitorId
+                    ) {
                         await evaluateAutoActionsForPage({
                             projectId: openConversation.projectId,
                             conversationId: openConversation.id,
@@ -302,8 +407,35 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
         });
 
         // Room Management
-        socket.on('join_conversation', (data: { conversationId: string }) => {
-            socket.join(`conversation_${data.conversationId}`);
+        socket.on('join_conversation', async (data: { conversationId: string }) => {
+            if (!data?.conversationId) {
+                socket.emit('error', 'conversationId is required');
+                return;
+            }
+
+            if (socket.data.userId) {
+                const projectId = await getConversationProjectId(data.conversationId);
+                if (!projectId) {
+                    socket.emit('error', 'Conversation not found');
+                    return;
+                }
+
+                const canAccessConversation = await hasProjectAccess(socket.data.userId, projectId);
+                if (!canAccessConversation) {
+                    socket.emit('error', 'Forbidden');
+                    return;
+                }
+
+                socket.join(`conversation_${data.conversationId}`);
+                return;
+            }
+
+            if (socket.data.conversationId === data.conversationId) {
+                socket.join(`conversation_${data.conversationId}`);
+                return;
+            }
+
+            socket.emit('error', 'Forbidden');
         });
 
         socket.on('leave_conversation', (data: { conversationId: string }) => {
@@ -312,6 +444,18 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
 
         // Typing Indicators
         socket.on('typing', (data: { conversationId: string; isTyping: boolean; text?: string }) => {
+            const typingKey = socket.data.userId
+                ? `typing:operator:${socket.data.userId}`
+                : `typing:visitor:${socket.data.visitorId || socket.id}`;
+
+            if (!allowSocketEvent(typingKey, 10_000, socket.data.userId ? 120 : 50)) {
+                return;
+            }
+
+            if (!socket.data.userId && socket.data.conversationId !== data.conversationId) {
+                return;
+            }
+
             const sender = socket.data.userId ? 'OPERATOR' : 'VISITOR';
             socket.to(`conversation_${data.conversationId}`).emit('typing_status', {
                 conversationId: data.conversationId,

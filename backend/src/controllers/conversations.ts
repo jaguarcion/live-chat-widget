@@ -4,13 +4,7 @@ import { AuthRequest } from '../middlewares/auth';
 import { getIO } from '../socketInstance';
 import { logEvent } from '../services/eventLogger';
 import { triggerWebhook } from '../services/webhookService';
-
-const ensureProjectAccess = async (userId: string, projectId: string) => {
-    return prisma.projectMember.findUnique({
-        where: { userId_projectId: { userId, projectId } },
-        select: { userId: true }
-    });
-};
+import { hasConversationAccess, hasProjectAccess } from '../services/accessControl';
 
 export const getConversations = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -67,7 +61,12 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
 
 export const getConversationMessages = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
         const { id } = req.params;
+        const canAccessConversation = await hasConversationAccess(userId, id);
+        if (!canAccessConversation) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         const messages = await prisma.message.findMany({
             where: { conversationId: id },
@@ -93,6 +92,9 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
         const { text, type, attachmentUrl } = req.body;
 
         if (!text && !attachmentUrl) { res.status(400).json({ error: 'Text or attachment is required' }); return; }
+
+        const canAccessConversation = await hasConversationAccess(userId, id);
+        if (!canAccessConversation) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         // Auto-assign operator if not assigned
         const conversation = await prisma.conversation.findUnique({ where: { id } });
@@ -199,15 +201,15 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
 
         if (!existingConversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
 
-        const membership = await ensureProjectAccess(userId, existingConversation.projectId);
-        if (!membership) { res.status(403).json({ error: 'Forbidden' }); return; }
+        const hasMembership = await hasProjectAccess(userId, existingConversation.projectId);
+        if (!hasMembership) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         const data: any = {};
         if (status) data.status = status;
         if (Object.prototype.hasOwnProperty.call(req.body, 'operatorId')) {
             if (operatorId) {
-                const targetMember = await ensureProjectAccess(operatorId, existingConversation.projectId);
-                if (!targetMember) {
+                const targetHasAccess = await hasProjectAccess(operatorId, existingConversation.projectId);
+                if (!targetHasAccess) {
                     res.status(400).json({ error: 'Operator is not a member of this project' });
                     return;
                 }
@@ -282,7 +284,12 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
 
 export const markAsRead = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
         const { id } = req.params;
+        const canAccessConversation = await hasConversationAccess(userId, id);
+        if (!canAccessConversation) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         await prisma.message.updateMany({
             where: {
@@ -307,6 +314,7 @@ export const searchConversations = async (req: AuthRequest, res: Response): Prom
 
         const q = (req.query.q as string || '').trim();
         if (!q) { res.json({ visitors: [], messages: [] }); return; }
+        if (q.length < 2) { res.status(400).json({ error: 'Search query must be at least 2 characters' }); return; }
 
         const memberships = await prisma.projectMember.findMany({
             where: { userId },

@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logEvent } from '../services/eventLogger';
 import { triggerWebhook } from '../services/webhookService';
 import { getIO } from '../socketInstance';
+import { extractWidgetTokenFromRequest, signWidgetSession, verifyWidgetSession } from '../services/widgetSession';
 
 export const initWidget = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -103,6 +104,11 @@ export const initWidget = async (req: Request, res: Response): Promise<void> => 
             project: { id: project.id, name: project.name },
             visitor: { id: visitor.id },
             conversation: { id: conversation.id },
+            widgetToken: signWidgetSession({
+                projectId,
+                conversationId: conversation.id,
+                visitorId: visitor.id,
+            }),
             settings: settings ? {
                 ...settings,
                 businessHours: JSON.parse(settings.businessHours)
@@ -117,9 +123,25 @@ export const initWidget = async (req: Request, res: Response): Promise<void> => 
 export const getHistory = async (req: Request, res: Response): Promise<void> => {
     try {
         const { conversationId } = req.params;
+        const token = extractWidgetTokenFromRequest(req);
+        if (!token) {
+            res.status(401).json({ error: 'widgetToken is required' });
+            return;
+        }
+
+        const session = verifyWidgetSession(token);
+        if (!session) {
+            res.status(401).json({ error: 'Invalid widget token' });
+            return;
+        }
 
         if (!conversationId) {
             res.status(400).json({ error: 'Conversation ID is required' });
+            return;
+        }
+
+        if (session.conversationId !== conversationId) {
+            res.status(403).json({ error: 'Forbidden' });
             return;
         }
 
@@ -142,9 +164,25 @@ export const getHistory = async (req: Request, res: Response): Promise<void> => 
 export const sendWidgetMessage = async (req: Request, res: Response): Promise<void> => {
     try {
         const { conversationId, text, type, attachmentUrl } = req.body;
+        const token = extractWidgetTokenFromRequest(req);
+        if (!token) {
+            res.status(401).json({ error: 'widgetToken is required' });
+            return;
+        }
+
+        const session = verifyWidgetSession(token);
+        if (!session) {
+            res.status(401).json({ error: 'Invalid widget token' });
+            return;
+        }
 
         if (!conversationId) {
             res.status(400).json({ error: 'conversationId is required' });
+            return;
+        }
+
+        if (session.conversationId !== conversationId) {
+            res.status(403).json({ error: 'Forbidden' });
             return;
         }
 
@@ -160,6 +198,11 @@ export const sendWidgetMessage = async (req: Request, res: Response): Promise<vo
 
         if (!conversation) {
             res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+
+        if (conversation.projectId !== session.projectId) {
+            res.status(403).json({ error: 'Forbidden' });
             return;
         }
 
@@ -225,15 +268,41 @@ export const sendWidgetMessage = async (req: Request, res: Response): Promise<vo
 export const updateVisitorContact = async (req: Request, res: Response): Promise<void> => {
     try {
         const { visitorId, name, email, phone, customFields } = req.body;
+        const token = extractWidgetTokenFromRequest(req);
+        if (!token) {
+            res.status(401).json({ error: 'widgetToken is required' });
+            return;
+        }
+
+        const session = verifyWidgetSession(token);
+        if (!session) {
+            res.status(401).json({ error: 'Invalid widget token' });
+            return;
+        }
 
         if (!visitorId) {
             res.status(400).json({ error: 'visitorId is required' });
             return;
         }
 
+        if (session.visitorId !== visitorId) {
+            res.status(403).json({ error: 'Forbidden' });
+            return;
+        }
+
         const visitor = await prisma.visitor.findUnique({ where: { id: visitorId } });
         if (!visitor) {
             res.status(404).json({ error: 'Visitor not found' });
+            return;
+        }
+
+        const conversation = await prisma.conversation.findUnique({
+            where: { id: session.conversationId },
+            select: { visitorId: true, projectId: true }
+        });
+
+        if (!conversation || conversation.visitorId !== visitorId || conversation.projectId !== session.projectId) {
+            res.status(403).json({ error: 'Forbidden' });
             return;
         }
 

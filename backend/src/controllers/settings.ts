@@ -1,11 +1,79 @@
 import { Response } from 'express';
 import { prisma } from '../db';
 import { AuthRequest } from '../middlewares/auth';
+import { hasProjectAccess } from '../services/accessControl';
+import { encryptSecret, isSecretEncryptionConfigured } from '../services/secretCrypto';
+
+const DEFAULT_PRECHAT_FIELDS = [
+    { id: 'name', label: 'Ваше имя', type: 'text', required: false, enabled: true },
+    { id: 'email', label: 'E-mail', type: 'email', required: true, enabled: true },
+    { id: 'phone', label: 'Телефон', type: 'text', required: false, enabled: false }
+];
+
+type SanitizedPrechatField = {
+    id: string;
+    label: string;
+    type: 'text' | 'email' | 'tel' | 'number';
+    required: boolean;
+    enabled: boolean;
+};
+
+const PRECHAT_ALLOWED_TYPES = new Set<SanitizedPrechatField['type']>(['text', 'email', 'tel', 'number']);
+
+const sanitizePrechatFields = (rawValue: unknown): SanitizedPrechatField[] => {
+    if (!Array.isArray(rawValue)) {
+        return DEFAULT_PRECHAT_FIELDS;
+    }
+
+    const sanitized: SanitizedPrechatField[] = [];
+    for (const candidate of rawValue) {
+        if (!candidate || typeof candidate !== 'object') continue;
+
+        const source = candidate as Record<string, unknown>;
+        const id = typeof source.id === 'string' ? source.id.trim() : '';
+        const label = typeof source.label === 'string' ? source.label.trim() : '';
+        const type = typeof source.type === 'string' ? source.type.trim().toLowerCase() : 'text';
+
+        if (!id || !/^[a-zA-Z0-9_-]{1,40}$/.test(id)) continue;
+        if (!label || label.length > 80) continue;
+        if (!PRECHAT_ALLOWED_TYPES.has(type as SanitizedPrechatField['type'])) continue;
+
+        sanitized.push({
+            id,
+            label,
+            type: type as SanitizedPrechatField['type'],
+            required: Boolean(source.required),
+            enabled: Boolean(source.enabled),
+        });
+    }
+
+    if (sanitized.length === 0) {
+        return DEFAULT_PRECHAT_FIELDS;
+    }
+
+    return sanitized.slice(0, 10);
+};
+
+const parseStoredPrechatFields = (stored: string | null): SanitizedPrechatField[] => {
+    if (!stored) return DEFAULT_PRECHAT_FIELDS;
+
+    try {
+        const parsed = JSON.parse(stored) as unknown;
+        return sanitizePrechatFields(parsed);
+    } catch {
+        return DEFAULT_PRECHAT_FIELDS;
+    }
+};
 
 // Get project settings (with defaults)
 export const getProjectSettings = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
         const { projectId } = req.params;
+        const hasMembership = await hasProjectAccess(userId, projectId);
+        if (!hasMembership) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         let settings = await prisma.projectSettings.findUnique({
             where: { projectId }
@@ -17,7 +85,7 @@ export const getProjectSettings = async (req: AuthRequest, res: Response): Promi
                 data: {
                     projectId,
                     businessHours: '[]',
-                    prechatFields: '[{"id":"name","label":"Ваше имя","type":"text","required":false,"enabled":true},{"id":"email","label":"E-mail","type":"email","required":true,"enabled":true},{"id":"phone","label":"Телефон","type":"text","required":false,"enabled":false}]',
+                    prechatFields: JSON.stringify(DEFAULT_PRECHAT_FIELDS),
                     offlineMessage: 'Оставьте сообщение, мы ответим как можно скорее',
                     welcomeText: 'Мы онлайн ежедневно без выходных.\nОставьте сообщение — мы ответим на почту или здесь.'
                 }
@@ -27,8 +95,10 @@ export const getProjectSettings = async (req: AuthRequest, res: Response): Promi
         // Parse JSON fields
         res.json({
             ...settings,
+            smtpPassword: null,
+            smtpPasswordConfigured: Boolean(settings.smtpPassword),
             businessHours: JSON.parse(settings.businessHours),
-            prechatFields: JSON.parse(settings.prechatFields || '[]')
+            prechatFields: parseStoredPrechatFields(settings.prechatFields)
         });
     } catch (error) {
         console.error('Get settings error:', error);
@@ -39,7 +109,13 @@ export const getProjectSettings = async (req: AuthRequest, res: Response): Promi
 // Update project settings
 export const updateProjectSettings = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
         const { projectId } = req.params;
+        const hasMembership = await hasProjectAccess(userId, projectId);
+        if (!hasMembership) { res.status(403).json({ error: 'Forbidden' }); return; }
+
         const body = req.body;
 
         const data: any = {};
@@ -50,7 +126,9 @@ export const updateProjectSettings = async (req: AuthRequest, res: Response): Pr
         if (body.isAlwaysOnline !== undefined) data.isAlwaysOnline = body.isAlwaysOnline;
         if (body.offlineMessage !== undefined) data.offlineMessage = body.offlineMessage;
         if (body.isOfflineForm !== undefined) data.isOfflineForm = body.isOfflineForm;
-        if (body.prechatFields !== undefined) data.prechatFields = JSON.stringify(body.prechatFields);
+        if (body.prechatFields !== undefined) {
+            data.prechatFields = JSON.stringify(sanitizePrechatFields(body.prechatFields));
+        }
 
         // Appearance
         if (body.chatColor !== undefined) data.chatColor = body.chatColor;
@@ -71,13 +149,32 @@ export const updateProjectSettings = async (req: AuthRequest, res: Response): Pr
         if (body.messengerMode !== undefined) data.messengerMode = body.messengerMode;
         if (body.typingWatch !== undefined) data.typingWatch = body.typingWatch;
 
+        // SMTP / integration settings
+        if (body.smtpHost !== undefined) data.smtpHost = body.smtpHost;
+        if (body.smtpPort !== undefined) data.smtpPort = body.smtpPort;
+        if (body.smtpUser !== undefined) data.smtpUser = body.smtpUser;
+        if (body.smtpFrom !== undefined) data.smtpFrom = body.smtpFrom;
+        if (body.emailNotify !== undefined) data.emailNotify = body.emailNotify;
+        if (body.webhookEnabled !== undefined) data.webhookEnabled = body.webhookEnabled;
+        if (body.smtpPassword !== undefined) {
+            if (body.smtpPassword === '') {
+                data.smtpPassword = null;
+            } else {
+                if (!isSecretEncryptionConfigured()) {
+                    res.status(400).json({ error: 'DATA_ENCRYPTION_KEY is required to store SMTP password securely' });
+                    return;
+                }
+                data.smtpPassword = encryptSecret(body.smtpPassword);
+            }
+        }
+
         const settings = await prisma.projectSettings.upsert({
             where: { projectId },
             create: {
                 projectId,
                 ...data,
                 businessHours: data.businessHours ?? '[]',
-                prechatFields: data.prechatFields ?? '[{"id":"name","label":"Ваше имя","type":"text","required":false,"enabled":true},{"id":"email","label":"E-mail","type":"email","required":true,"enabled":true},{"id":"phone","label":"Телефон","type":"text","required":false,"enabled":false}]',
+                prechatFields: data.prechatFields ?? JSON.stringify(DEFAULT_PRECHAT_FIELDS),
                 offlineMessage: data.offlineMessage ?? 'Оставьте сообщение, мы ответим как можно скорее',
                 welcomeText: data.welcomeText ?? 'Мы онлайн ежедневно без выходных.\\nОставьте сообщение — мы ответим на почту или здесь.'
             },
@@ -86,8 +183,10 @@ export const updateProjectSettings = async (req: AuthRequest, res: Response): Pr
 
         res.json({
             ...settings,
+            smtpPassword: null,
+            smtpPasswordConfigured: Boolean(settings.smtpPassword),
             businessHours: JSON.parse(settings.businessHours),
-            prechatFields: JSON.parse(settings.prechatFields || '[]')
+            prechatFields: parseStoredPrechatFields(settings.prechatFields)
         });
     } catch (error) {
         console.error('Update settings error:', error);

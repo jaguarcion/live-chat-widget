@@ -1,16 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+import { AuthTokenPayload, verifyAccessToken } from '../services/authToken';
 
 export interface AuthRequest extends Request {
-    user?: {
-        userId: string;
-        role: string;
-    };
+    user?: AuthTokenPayload;
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
         res.status(401).json({ error: 'Unauthorized' });
@@ -19,11 +14,12 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 
     const token = authHeader.split(' ')[1];
 
-    try {
-        const payload = jwt.verify(token as string, JWT_SECRET) as { userId: string; role: string };
-        req.user = payload;
-        next();
-    } catch (error) {
+    const payload = await verifyAccessToken(token as string);
+    if (!payload) {
         res.status(401).json({ error: 'Unauthorized' });
+        return;
     }
+
+    req.user = payload;
+    next();
 };

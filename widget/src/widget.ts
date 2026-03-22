@@ -26,6 +26,7 @@ export class LiveChatWidget {
     private projectId: string;
     private visitorId: string | null = null;
     private conversationId: string | null = null;
+    private widgetToken: string | null = null;
     private chatSocket: ChatSocket;
     private isOpen = false;
     private isOnline = true;
@@ -81,6 +82,7 @@ export class LiveChatWidget {
             const data = await initWidget(this.projectId, this.visitorId, metadata);
             this.visitorId = data.visitor.id;
             this.conversationId = data.conversation.id;
+            this.widgetToken = data.widgetToken;
             localStorage.setItem('livechat_visitor_id', this.visitorId);
 
             if (data.settings) {
@@ -102,11 +104,13 @@ export class LiveChatWidget {
 
             this.updateOnlineUI(status.offlineMessage, status.onlineOperators);
 
-            const history = await getHistory(this.conversationId);
+            if (!this.widgetToken) throw new Error('Widget token is missing');
+
+            const history = await getHistory(this.conversationId, this.widgetToken);
             this.messages = history;
             this.renderMessages();
 
-            this.chatSocket.connect(this.conversationId, this.visitorId ?? undefined);
+            this.chatSocket.connect(this.conversationId, this.widgetToken, this.visitorId ?? undefined);
             this.startPageTracking();
             this.chatSocket.onMessage((msg) => {
                 if (this.messages.find(m => m.id === msg.id)) return;
@@ -248,7 +252,7 @@ export class LiveChatWidget {
             const welcomeEl = this.windowEl.querySelector('.livechat-welcome');
             if (welcomeEl && this.onlineOperators.length > 0) {
                 const operatorsHtml = this.buildOperatorsHtml(this.onlineOperators);
-                const formattedWelcome = this.welcomeText.replace(/\\n/g, '<br/>');
+                const formattedWelcome = this.escapeHtml(this.welcomeText).replace(/\n/g, '<br/>');
                 welcomeEl.innerHTML = operatorsHtml + `<div class="livechat-welcome-text">${formattedWelcome}</div>`;
             }
 
@@ -474,14 +478,19 @@ export class LiveChatWidget {
         this.fileInput.style.display = 'none';
         this.fileInput.onchange = async () => {
             const file = this.fileInput.files?.[0];
-            if (!file || !this.conversationId) return;
+            if (!file || !this.conversationId || !this.visitorId || !this.widgetToken) return;
 
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('conversationId', this.conversationId);
+            formData.append('visitorId', this.visitorId);
 
             try {
                 const res = await fetch(`${getApiBase()}/widget/upload`, {
                     method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${this.widgetToken}`,
+                    },
                     body: formData
                 });
                 const data = await res.json();
@@ -691,19 +700,74 @@ export class LiveChatWidget {
         formEl.style.width = '240px';
         formEl.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
 
-        let html = '<div style="font-weight:600; font-size:13px; color:#0f172a; margin-bottom:12px; text-align:center;">Пожалуйста, представьтесь</div>';
+        const titleEl = document.createElement('div');
+        titleEl.style.fontWeight = '600';
+        titleEl.style.fontSize = '13px';
+        titleEl.style.color = '#0f172a';
+        titleEl.style.marginBottom = '12px';
+        titleEl.style.textAlign = 'center';
+        titleEl.textContent = 'Пожалуйста, представьтесь';
+        formEl.appendChild(titleEl);
 
-        this.prechatFields.forEach(f => {
-            html += `<div style="margin-bottom:10px;">
-                <label style="display:block; font-size:11px; color:#475569; margin-bottom:4px;">${this.escapeHtml(f.label)} ${f.required ? '<span style="color:#ef4444">*</span>' : ''}</label>
-                <input class="livechat-lead-input" data-id="${f.id}" data-required="${f.required}" type="${f.type}" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; outline:none;" />
-            </div>`;
+        const allowedInputTypes = new Set(['text', 'email', 'tel', 'number']);
+        const safeFields = this.prechatFields.filter((f) => {
+            if (!f.enabled) return false;
+            if (!/^[a-zA-Z0-9_-]{1,40}$/.test(f.id)) return false;
+            return true;
         });
-        html += `<button class="livechat-lead-submit" style="width:100%; padding:8px; border:none; border-radius:6px; background:var(--primary-color, #6366f1); color:white; font-size:13px; font-weight:500; cursor:pointer; margin-top:4px; transition: opacity 0.2s;">Отправить</button>`;
 
-        formEl.innerHTML = html;
+        safeFields.forEach((f) => {
+            const fieldWrap = document.createElement('div');
+            fieldWrap.style.marginBottom = '10px';
 
-        const submitBtn = formEl.querySelector('.livechat-lead-submit') as HTMLButtonElement;
+            const labelEl = document.createElement('label');
+            labelEl.style.display = 'block';
+            labelEl.style.fontSize = '11px';
+            labelEl.style.color = '#475569';
+            labelEl.style.marginBottom = '4px';
+            labelEl.textContent = f.label;
+
+            if (f.required) {
+                const requiredEl = document.createElement('span');
+                requiredEl.style.color = '#ef4444';
+                requiredEl.textContent = ' *';
+                labelEl.appendChild(requiredEl);
+            }
+
+            const inputEl = document.createElement('input');
+            inputEl.className = 'livechat-lead-input';
+            inputEl.dataset.id = f.id;
+            inputEl.dataset.required = String(Boolean(f.required));
+            inputEl.type = allowedInputTypes.has(f.type) ? f.type : 'text';
+            inputEl.style.width = '100%';
+            inputEl.style.boxSizing = 'border-box';
+            inputEl.style.padding = '8px 10px';
+            inputEl.style.border = '1px solid #cbd5e1';
+            inputEl.style.borderRadius = '6px';
+            inputEl.style.fontSize = '13px';
+            inputEl.style.outline = 'none';
+
+            fieldWrap.appendChild(labelEl);
+            fieldWrap.appendChild(inputEl);
+            formEl.appendChild(fieldWrap);
+        });
+
+        const submitBtn = document.createElement('button');
+        submitBtn.className = 'livechat-lead-submit';
+        submitBtn.textContent = 'Отправить';
+        submitBtn.style.width = '100%';
+        submitBtn.style.padding = '8px';
+        submitBtn.style.border = 'none';
+        submitBtn.style.borderRadius = '6px';
+        submitBtn.style.background = 'var(--primary-color, #6366f1)';
+        submitBtn.style.color = 'white';
+        submitBtn.style.fontSize = '13px';
+        submitBtn.style.fontWeight = '500';
+        submitBtn.style.cursor = 'pointer';
+        submitBtn.style.marginTop = '4px';
+        submitBtn.style.transition = 'opacity 0.2s';
+        formEl.appendChild(submitBtn);
+
         submitBtn.onclick = async () => {
             const inputs = formEl.querySelectorAll('.livechat-lead-input') as NodeListOf<HTMLInputElement>;
             const data: any = {};
@@ -735,9 +799,16 @@ export class LiveChatWidget {
                     }
                 }
 
+                if (!this.widgetToken) {
+                    throw new Error('Widget token is missing');
+                }
+
                 await fetch(`${getApiBase()}/widget/visitor`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${this.widgetToken}`,
+                    },
                     body: JSON.stringify({
                         visitorId: this.visitorId,
                         name: data.name,

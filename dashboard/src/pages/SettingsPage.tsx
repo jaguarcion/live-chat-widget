@@ -91,6 +91,8 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
     const [smtpPort, setSmtpPort] = useState(587);
     const [smtpUser, setSmtpUser] = useState('');
     const [smtpPassword, setSmtpPassword] = useState('');
+    const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false);
+    const [smtpPasswordDirty, setSmtpPasswordDirty] = useState(false);
     const [smtpFrom, setSmtpFrom] = useState('');
     const [emailNotify, setEmailNotify] = useState(false);
     const [webhookEnabled, setWebhookEnabled] = useState(false);
@@ -197,7 +199,9 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
             setSmtpHost(data.smtpHost || '');
             setSmtpPort(data.smtpPort || 587);
             setSmtpUser(data.smtpUser || '');
-            setSmtpPassword(data.smtpPassword || '');
+            setSmtpPassword('');
+            setSmtpPasswordConfigured(Boolean(data.smtpPasswordConfigured));
+            setSmtpPasswordDirty(false);
             setSmtpFrom(data.smtpFrom || '');
             setEmailNotify(data.emailNotify || false);
             setWebhookEnabled(data.webhookEnabled || false);
@@ -312,14 +316,18 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                 chatColor, buttonPosition, buttonStyle, coloredHeader,
                 onlineTitle, offlineTitle, welcomeText,
                 soundEnabled, showMobileButton, showLogo, fileUpload, messengerMode, typingWatch,
-                smtpHost, smtpPort, smtpUser, smtpPassword, smtpFrom, emailNotify, webhookEnabled,
+                smtpHost, smtpPort, smtpUser, smtpFrom, emailNotify, webhookEnabled,
                 prechatFields
             };
+            if (smtpPasswordDirty) {
+                payload.smtpPassword = smtpPassword;
+            }
             // Send businessHours even if not configured if we are in schedule mode
             if (!isAlwaysOnline) {
                 payload.businessHours = hours;
             }
             await updateProjectSettings(selectedProjectId, payload);
+            await loadSettings(selectedProjectId);
             await updateAutoActions(selectedProjectId, { rules: autoActions });
             await loadAutoActionTriggers(selectedProjectId);
             setSaved(true);
@@ -1208,8 +1216,11 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                                             <input
                                                 type="password"
                                                 value={smtpPassword}
-                                                onChange={e => setSmtpPassword(e.target.value)}
-                                                placeholder="P@ssw0rd"
+                                                onChange={e => {
+                                                    setSmtpPassword(e.target.value);
+                                                    setSmtpPasswordDirty(true);
+                                                }}
+                                                placeholder={smtpPasswordConfigured ? '•••••••• (сохранен, введите новый для замены)' : 'P@ssw0rd'}
                                                 className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                                             />
                                         </div>

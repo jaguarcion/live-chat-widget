@@ -6,13 +6,20 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isInitializing } = useAuthStore();
+  if (isInitializing) {
+    return <div className="min-h-screen flex items-center justify-center text-text-muted">Загрузка...</div>;
+  }
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
 function App() {
-  const { isAuthenticated, fetchUser } = useAuthStore();
+  const { isAuthenticated, fetchUser, initialize } = useAuthStore();
   const { theme } = useThemeStore();
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
 
   useEffect(() => {
     if (isAuthenticated) {

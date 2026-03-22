@@ -71,6 +71,19 @@ By default:
 
 To embed the widget on an external site, you would typically build the `/widget` project to output a bundled script, and then include it on your site using the provided project script tag.
 
+## Security: Media-Origin Isolation
+
+Uploaded files are served from a dedicated media origin, not from backend/dashboard origin.
+
+- `MEDIA_BASE_URL`: public base URL for file links returned by upload API (example: `https://media.example.com`)
+- `ENFORCE_MEDIA_ORIGIN`: when `true` (default in docker-compose), backend fails fast if `MEDIA_BASE_URL` is missing
+
+In Docker setup, the `media` service serves `/uploads/*` from a shared read-only volume mounted from backend uploads storage.
+
+Example local media URL:
+
+- `http://localhost:8080/uploads/<filename>`
+
 ## Tech Stack
 - **Backend:** Node.js, Express, Prisma ORM, Socket.IO, Multer, bcrypt, jsonwebtoken.
 - **Frontend (Dashboard):** React 19, Vite, Tailwind CSS v4, Zustand, React Router v7, Axios.

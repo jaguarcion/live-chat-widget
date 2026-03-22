@@ -40,12 +40,13 @@ export class ChatSocket {
         });
     }
 
-    connect(conversationId: string, visitorId?: string) {
+    connect(conversationId: string, widgetToken: string, visitorId?: string) {
         this.socket.connect();
         this.socket.on('connect', () => {
             this.socket.emit('visitor_connect', {
                 conversationId,
                 visitorId,
+                widgetToken,
                 url: window.location.href,
                 title: document.title,
                 sessionId: this.sessionId,

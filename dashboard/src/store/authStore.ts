@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { loginAPI, registerAPI, authMeAPI } from '../api';
+import { loginAPI, registerAPI, authMeAPI, logoutAPI, refreshAPI, setAuthToken } from '../api';
 
 interface User {
     id: string;
@@ -15,46 +15,40 @@ interface AuthState {
     token: string | null;
     user: User | null;
     isAuthenticated: boolean;
+    isInitializing: boolean;
+    initialize: () => Promise<void>;
     login: (email: string, password: string) => Promise<void>;
     register: (email: string, password: string, name: string) => Promise<void>;
     fetchUser: () => Promise<void>;
     logout: () => void;
 }
 
-// Hydrate from localStorage on store creation (synchronous, no race condition)
-function getInitialState(): { token: string | null; user: User | null; isAuthenticated: boolean } {
-    const token = localStorage.getItem('token');
-    if (token) {
-        try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            return {
-                token,
-                user: { id: payload.userId, email: '', name: '', role: payload.role },
-                isAuthenticated: true,
-            };
-        } catch {
-            localStorage.removeItem('token');
-        }
-    }
-    return { token: null, user: null, isAuthenticated: false };
-}
-
-const initial = getInitialState();
-
 export const useAuthStore = create<AuthState>((set) => ({
-    token: initial.token,
-    user: initial.user,
-    isAuthenticated: initial.isAuthenticated,
+    token: null,
+    user: null,
+    isAuthenticated: false,
+    isInitializing: true,
+
+    initialize: async () => {
+        try {
+            const { data } = await refreshAPI();
+            setAuthToken(data.token);
+            set({ token: data.token, user: data.user, isAuthenticated: true, isInitializing: false });
+        } catch {
+            setAuthToken(null);
+            set({ token: null, user: null, isAuthenticated: false, isInitializing: false });
+        }
+    },
 
     login: async (email, password) => {
         const { data } = await loginAPI(email, password);
-        localStorage.setItem('token', data.token);
+        setAuthToken(data.token);
         set({ token: data.token, user: data.user, isAuthenticated: true });
     },
 
     register: async (email, password, name) => {
         const { data } = await registerAPI(email, password, name);
-        localStorage.setItem('token', data.token);
+        setAuthToken(data.token);
         set({ token: data.token, user: data.user, isAuthenticated: true });
     },
 
@@ -64,13 +58,15 @@ export const useAuthStore = create<AuthState>((set) => ({
             set({ user: data.user });
         } catch (error) {
             console.error('Failed to fetch user:', error);
-            localStorage.removeItem('token');
+            setAuthToken(null);
             set({ token: null, user: null, isAuthenticated: false });
         }
     },
 
     logout: () => {
-        localStorage.removeItem('token');
+        // Best-effort server-side revoke for current token.
+        logoutAPI().catch(() => undefined);
+        setAuthToken(null);
         set({ token: null, user: null, isAuthenticated: false });
     },
 }));
