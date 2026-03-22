@@ -11,6 +11,21 @@ const logos = [
     'You.gr',
 ];
 
+const integrations = [
+    'WordPress',
+    'Shopify',
+    'Slack',
+    'Telegram',
+    'WhatsApp',
+    'Google Analytics',
+    'Zapier',
+    'HubSpot',
+    'Pipedrive',
+    'Meta Ads',
+    'Webhooks',
+    'REST API',
+];
+
 const features = [
     {
         title: 'Единый inbox для всех каналов',
@@ -138,6 +153,11 @@ export default function LandingPage() {
                                 <Link to="/login" className="landing-btn landing-btn-solid landing-btn-lg">Запустить за 3 минуты</Link>
                                 <a href="#features" className="landing-btn landing-btn-ghost landing-btn-lg">Смотреть возможности</a>
                             </div>
+                            <div className="landing-hero-mini-chips">
+                                <span>Live Chat + Bot + CRM</span>
+                                <span>Queue + Auto Routing</span>
+                                <span>AI-ready Architecture</span>
+                            </div>
                             <div className="landing-hero-points">
                                 <span>Без кредитной карты</span>
                                 <span>WordPress-ready</span>
@@ -179,6 +199,50 @@ export default function LandingPage() {
                                     <span key={`${logo}-${index}`}>{logo}</span>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section className="landing-section landing-section-tech">
+                    <div className="landing-container landing-tech-grid">
+                        <article className="landing-tech-card">
+                            <div className="landing-tech-top">
+                                <span />
+                                <span />
+                                <span />
+                            </div>
+                            <div className="landing-tech-terminal">
+                                <p><span>$</span> docker compose up -d --build</p>
+                                <p><span>{'>'}</span> backend | dashboard | widget | media</p>
+                                <p><span>{'>'}</span> migrations deployed successfully</p>
+                                <p><span>{'>'}</span> websocket ready on wss://api.your-domain.com</p>
+                                <p><span>{'>'}</span> widget script online: 42.8kb gzipped</p>
+                            </div>
+                        </article>
+
+                        <article className="landing-tech-card landing-tech-code">
+                            <h3>Вставка на сайт в 1 шаг</h3>
+                            <pre>
+                                <code>{`<script>
+window.LiveChat = { projectId: "PROJECT_ID" };
+</script>
+<script src="https://widget.your-domain.com/widget.js" async></script>`}</code>
+                            </pre>
+                            <p>Подходит для любых CMS, SPA и custom storefront.</p>
+                        </article>
+                    </div>
+                </section>
+
+                <section className="landing-section landing-integrations">
+                    <div className="landing-container">
+                        <div className="landing-section-head">
+                            <p className="landing-kicker">INTEGRATIONS</p>
+                            <h2>Подключайте ваш текущий стек без миграции процессов</h2>
+                        </div>
+                        <div className="landing-integrations-grid">
+                            {integrations.map((item) => (
+                                <span key={item}>{item}</span>
+                            ))}
                         </div>
                     </div>
                 </section>
