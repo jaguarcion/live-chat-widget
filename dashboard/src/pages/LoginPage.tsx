@@ -23,7 +23,7 @@ export default function LoginPage() {
             } else {
                 await login(email, password);
             }
-            navigate('/');
+            navigate('/app');
         } catch (err: any) {
             setError(err.response?.data?.error || 'Something went wrong');
         } finally {
