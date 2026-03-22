@@ -6,7 +6,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import LandingPage from './pages/LandingPage';
 import LandingPage2 from './pages/LandingPage2';
-import './landing2.css';
+import InteractiveEffectsDemo from './pages/InteractiveEffectsDemo';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitializing } = useAuthStore();
@@ -43,6 +43,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/landing2" element={<LandingPage2 />} />
+        <Route path="/interactive-demo" element={<InteractiveEffectsDemo />} />
         <Route path="/login" element={<LoginPage />} />
         <Route
           path="/app"

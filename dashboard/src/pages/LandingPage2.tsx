@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useEffect } from 'react';
+import { initializeInteractiveEffects, addRippleStyles } from '../utils/interactiveEffects';
+import '../landing2.css';
 
 const features = [
     {
@@ -94,6 +96,12 @@ const pricing = [
 
 export default function LandingPage2() {
     useEffect(() => {
+        // Add ripple effect styles
+        addRippleStyles();
+
+        // Initialize all interactive effects
+        const cleanup = initializeInteractiveEffects();
+
         // Smooth scroll for anchor links
         const handleAnchorClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
@@ -108,7 +116,37 @@ export default function LandingPage2() {
         };
 
         document.addEventListener('click', handleAnchorClick);
-        return () => document.removeEventListener('click', handleAnchorClick);
+
+        // Parallax effect for blob backgrounds
+        const handleScroll = () => {
+            const scrollY = window.scrollY;
+            const heroSection = document.querySelector('.landing2-hero');
+            if (heroSection) {
+                (heroSection as HTMLElement).style.backgroundPosition = `0% ${scrollY * 0.5}px`;
+            }
+        };
+
+        // Mouse tracking for feature cards
+        const handleMouseMove = (e: MouseEvent) => {
+            const cards = document.querySelectorAll('.landing2-feature-card');
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 100;
+                const y = ((e.clientY - rect.top) / rect.height) * 100;
+                (card as HTMLElement).style.setProperty('--mouse-x', `${x}%`);
+                (card as HTMLElement).style.setProperty('--mouse-y', `${y}%`);
+            });
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        document.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+        return () => {
+            document.removeEventListener('click', handleAnchorClick);
+            window.removeEventListener('scroll', handleScroll);
+            document.removeEventListener('mousemove', handleMouseMove);
+            cleanup();
+        };
     }, []);
 
     return (
