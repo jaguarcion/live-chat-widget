@@ -8,6 +8,7 @@ import { evaluateAutoActionsForPage } from './services/autoActions';
 import { getConversationProjectId, hasProjectAccess } from './services/accessControl';
 import { verifyWidgetSession } from './services/widgetSession';
 import { verifyAccessToken } from './services/authToken';
+import { addLiveVisitor, updateLiveVisitorPage, removeLiveVisitor, getLiveVisitors } from './services/liveVisitors';
 
 const socketRateBuckets = new Map<string, number[]>();
 
@@ -119,6 +120,27 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                     socket.data.projectId = conversation.projectId;
                     const visitorId = session.visitorId;
                     socket.data.visitorId = visitorId;
+
+                    // Track live visitor
+                    const visitorRecord = await prisma.visitor.findUnique({
+                        where: { id: visitorId },
+                        select: { name: true, email: true, referrer: true }
+                    });
+                    addLiveVisitor(conversation.projectId, {
+                        visitorId,
+                        conversationId: data.conversationId,
+                        name: visitorRecord?.name ?? null,
+                        email: visitorRecord?.email ?? null,
+                        url: data.url ?? null,
+                        title: data.title ?? null,
+                        referrer: visitorRecord?.referrer ?? null,
+                        connectedAt: new Date().toISOString(),
+                    });
+                    io.to(`project_${conversation.projectId}`).emit('live_visitors', {
+                        projectId: conversation.projectId,
+                        visitors: getLiveVisitors(conversation.projectId),
+                    });
+
                     io.to(`project_${conversation.projectId}`).emit('visitor_online', {
                         conversationId: data.conversationId,
                         visitorId,
@@ -341,6 +363,84 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
             }
         });
 
+        // Operator sends an internal note (not visible to visitor)
+        socket.on('operator_note', async (data: {
+            conversationId: string;
+            text: string;
+            mentions?: string[]; // array of userIds
+        }) => {
+            try {
+                if (!allowSocketEvent(`operator_message:${socket.data.userId || socket.id}`, 10_000, 30)) {
+                    socket.emit('error', 'Too many messages');
+                    return;
+                }
+
+                if (!socket.data.userId) {
+                    socket.emit('error', 'Unauthorized');
+                    return;
+                }
+
+                if (!data.text?.trim()) {
+                    socket.emit('error', 'Note text is required');
+                    return;
+                }
+
+                const conversation = await prisma.conversation.findUnique({
+                    where: { id: data.conversationId },
+                    select: { projectId: true }
+                });
+
+                if (!conversation) {
+                    socket.emit('error', 'Conversation not found');
+                    return;
+                }
+
+                const canAccess = await hasProjectAccess(socket.data.userId, conversation.projectId);
+                if (!canAccess) {
+                    socket.emit('error', 'Forbidden');
+                    return;
+                }
+
+                const message = await (prisma.message as any).create({
+                    data: {
+                        conversationId: data.conversationId,
+                        text: data.text.trim(),
+                        type: 'TEXT',
+                        sender: 'OPERATOR',
+                        senderId: socket.data.userId,
+                        isNote: true,
+                        mentions: data.mentions?.length ? JSON.stringify(data.mentions) : null,
+                    },
+                    include: {
+                        user: { select: { id: true, name: true, avatarUrl: true, title: true } }
+                    }
+                });
+
+                // Send note ONLY to operators in this project (not to conversation room / widget)
+                io.to(`project_${conversation.projectId}`).emit('operator_note', message);
+
+                // Notify mentioned operators with a dedicated event
+                if (data.mentions?.length) {
+                    for (const mentionedUserId of data.mentions) {
+                        io.to(`operator_${mentionedUserId}`).emit('operator_mention', {
+                            conversationId: data.conversationId,
+                            noteId: message.id,
+                            fromUserId: socket.data.userId,
+                            text: data.text.trim(),
+                        });
+                    }
+                }
+
+                logEvent(conversation.projectId, 'NOTE_SENT', {
+                    messageId: message.id,
+                    userId: socket.data.userId,
+                    conversationId: data.conversationId,
+                });
+            } catch (error) {
+                console.error('Operator note error:', error);
+            }
+        });
+
         // Page view tracking from widget
         socket.on('page_view', async (data: {
             visitorId: string;
@@ -370,6 +470,16 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
                             title: data.title || null,
                         }
                     });
+
+                    // Update live visitor page
+                    const projectId = socket.data.projectId || socket.data.widgetSession?.projectId;
+                    if (projectId) {
+                        updateLiveVisitorPage(projectId, data.visitorId, data.url, data.title);
+                        io.to(`project_${projectId}`).emit('live_visitors', {
+                            projectId,
+                            visitors: getLiveVisitors(projectId),
+                        });
+                    }
 
                     const openConversation = data.conversationId
                         ? await prisma.conversation.findUnique({
@@ -495,8 +605,13 @@ export const setupSockets = (io: Server<DefaultEventsMap, DefaultEventsMap, Defa
         socket.on('disconnect', async () => {
             console.log('Client disconnected:', socket.id);
 
-            // Notify operators that visitor went offline
+            // Notify operators that visitor went offline and remove from live visitors
             if (!socket.data.userId && socket.data.conversationId && socket.data.projectId) {
+                removeLiveVisitor(socket.data.projectId, socket.data.visitorId);
+                io.to(`project_${socket.data.projectId}`).emit('live_visitors', {
+                    projectId: socket.data.projectId,
+                    visitors: getLiveVisitors(socket.data.projectId),
+                });
                 io.to(`project_${socket.data.projectId}`).emit('visitor_offline', {
                     conversationId: socket.data.conversationId,
                     visitorId: socket.data.visitorId,

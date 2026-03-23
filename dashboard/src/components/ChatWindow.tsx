@@ -1,17 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '../store/chatStore';
-import { sendMessage as sendMessageAPI, uploadFile } from '../api';
+import { sendMessage as sendMessageAPI, uploadFile, sendNote, pinConversation, getProjectMembers } from '../api';
+import { playNotificationSound } from '../utils/soundUtils';
 import QuickRepliesPanel from './QuickRepliesPanel';
 
 export default function ChatWindow() {
-    const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping } = useChatStore();
+    const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping, addNote, updateConversationPin } = useChatStore();
     const [text, setText] = useState('');
+    const [noteMode, setNoteMode] = useState(false);
+    const [members, setMembers] = useState<any[]>([]);
+    const [mentionQuery, setMentionQuery] = useState('');
+    const [mentionAnchor, setMentionAnchor] = useState<number | null>(null);
     const typingTimeoutRef = useRef<any>(null);
     const [sending, setSending] = useState(false);
     const [showQuickReplies, setShowQuickReplies] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const activeConversation = conversations.find(c => c.id === activeConversationId);
     const canSendMessage = !!activeConversationId && activeConversation?.status === 'OPEN';
@@ -22,6 +28,23 @@ export default function ChatWindow() {
     }, [activeConversationId]);
 
     useEffect(() => {
+        // Load project members for mentions
+        const loadMembers = async () => {
+            if (!activeConversationId) return;
+            try {
+                const conv = conversations.find(c => c.id === activeConversationId);
+                if (conv) {
+                    const { data } = await getProjectMembers(conv.projectId);
+                    setMembers(data || []);
+                }
+            } catch (err) {
+                console.error('Error loading members:', err);
+            }
+        };
+        loadMembers();
+    }, [activeConversationId, conversations]);
+
+    useEffect(() => {
         // Smooth scroll for new messages (incoming or outgoing)
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
@@ -30,14 +53,91 @@ export default function ChatWindow() {
         if (!text.trim() || !activeConversationId || !canSendMessage) return;
         setSending(true);
         try {
-            const { data } = await sendMessageAPI(activeConversationId, text.trim());
-            addMessage(data);
+            // Extract mentions in format @userId
+            const mentions = text.match(/@\[(\w+)\]/g)?.map(m => m.slice(2, -1)) || [];
+            
+            if (noteMode) {
+                // Send as internal note
+                const { data } = await sendNote(activeConversationId, text.trim(), mentions);
+                addNote(data);
+                playNotificationSound('new_message');
+            } else {
+                // Send as regular message
+                const { data } = await sendMessageAPI(activeConversationId, text.trim());
+                addMessage(data);
+                mentions.forEach(userId => playNotificationSound('mention'));
+            }
+            
             setText('');
+            setMentionQuery('');
+            setMentionAnchor(null);
+            setNoteMode(false);
             sendTyping(activeConversationId, false);
         } catch (err) {
             console.error('Send error:', err);
         } finally {
             setSending(false);
+        }
+    };
+
+    const extractMentions = (textContent: string) => {
+        const cursorPos = textareaRef.current?.selectionStart || 0;
+        const beforeCursor = textContent.slice(0, cursorPos);
+        const lastAtIndex = beforeCursor.lastIndexOf('@');
+        
+        if (lastAtIndex === -1) {
+            setMentionAnchor(null);
+            setMentionQuery('');
+            return;
+        }
+        
+        const query = beforeCursor.slice(lastAtIndex + 1);
+        // Only show mention dropdown if typing after @ and haven't completed mention yet
+        if (query && !query.includes(' ') && !query.includes('\n')) {
+            setMentionQuery(query);
+            setMentionAnchor(lastAtIndex);
+        } else {
+            setMentionAnchor(null);
+            setMentionQuery('');
+        }
+    };
+
+    const insertMention = (memberId: string, memberName: string) => {
+        if (!textareaRef.current || mentionAnchor === null) return;
+        
+        const before = text.slice(0, mentionAnchor);
+        const after = text.slice(mentionAnchor + mentionQuery.length + 1);
+        const newText = `${before}@[${memberName}](${memberId}) ${after}`;
+        
+        setText(newText);
+        setMentionAnchor(null);
+        setMentionQuery('');
+        
+        // Reset cursor position
+        setTimeout(() => {
+            if (textareaRef.current) {
+                const newPos = before.length + memberName.length + 5;
+                textareaRef.current.selectionStart = newPos;
+                textareaRef.current.selectionEnd = newPos;
+                textareaRef.current.focus();
+            }
+        }, 0);
+    };
+
+    const insertScreenShare = () => {
+        const jitsiLink = `https://meet.jit.si/${activeConversationId}-${Date.now()}`;
+        const newText = text + (text ? '\n' : '') + `Давайте поговорим на видео: ${jitsiLink}`;
+        setText(newText);
+        textareaRef.current?.focus();
+    };
+
+    const handlePin = async () => {
+        if (!activeConversationId) return;
+        try {
+            await pinConversation(activeConversationId);
+            updateConversationPin(activeConversationId);
+        } catch (err) {
+            console.error('Pin error:', err);
         }
     };
 
@@ -57,10 +157,29 @@ export default function ChatWindow() {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        // Ctrl/Cmd + Enter to send
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             e.preventDefault();
             handleSend();
+            return;
         }
+        
+        // Esc to close mention dropdown or clear note mode
+        if (e.key === 'Escape') {
+            if (mentionAnchor !== null) {
+                setMentionAnchor(null);
+                setMentionQuery('');
+            } else if (noteMode) {
+                setNoteMode(false);
+            }
+            return;
+        }
+        
+        // Regular Enter (without Ctrl) doesn't send, just adds newline
+        if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+            return; // Default behavior: add newline
+        }
+        
         if (e.key === '/' && text === '') {
             e.preventDefault();
             setShowQuickReplies(true);
@@ -73,7 +192,10 @@ export default function ChatWindow() {
     };
 
     const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setText(e.target.value);
+        const newText = e.target.value;
+        setText(newText);
+        extractMentions(newText);
+        
         if (!activeConversationId || !canSendMessage) return;
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -125,6 +247,15 @@ export default function ChatWindow() {
                     <p className="text-xs text-text-muted mt-0.5">{activeConversation?.project.name}</p>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
+                    <button
+                        onClick={handlePin}
+                        title={activeConversation?.isPinned ? 'Открепить' : 'Закрепить'}
+                        className="p-2 rounded-lg hover:bg-primary/10 text-text-muted hover:text-primary transition-colors"
+                    >
+                        <svg className={`w-5 h-5 ${activeConversation?.isPinned ? 'text-primary fill-current' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h6a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                        </svg>
+                    </button>
                     <span className={`text-xs px-2 py-1 rounded-full ${activeConversation?.status === 'OPEN'
                         ? 'bg-success/15 text-success'
                         : 'bg-text-muted/15 text-text-muted'
@@ -187,14 +318,28 @@ export default function ChatWindow() {
 
                             <div className={`flex flex-col max-w-[75%] ${msg.sender === 'OPERATOR' ? 'items-end' : 'items-start'}`}>
                                 {msg.sender === 'OPERATOR' && (
-                                    <span className="text-[11px] text-text-muted mb-1 mr-1">
-                                        {msg.user?.name || 'Оператор'}
-                                    </span>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-[11px] text-text-muted">
+                                            {msg.user?.name || 'Оператор'}
+                                        </span>
+                                        {msg.isNote && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold flex items-center gap-1">
+                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" opacity="0.3"/>
+                                                    <path d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                                                </svg>
+                                                Заметка
+                                            </span>
+                                        )}
+                                    </div>
                                 )}
 
-                                <div className={`${msg.sender === 'OPERATOR'
-                                    ? 'bg-primary text-white rounded-lg rounded-tr-none'
-                                    : 'bg-surface-tertiary text-text-primary rounded-lg rounded-tl-none border border-border'
+                                <div className={`${
+                                    msg.isNote
+                                        ? 'bg-amber-100 text-amber-900 rounded-lg border border-amber-300'
+                                        : msg.sender === 'OPERATOR'
+                                        ? 'bg-primary text-white rounded-lg rounded-tr-none'
+                                        : 'bg-surface-tertiary text-text-primary rounded-lg rounded-tl-none border border-border'
                                     } px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}>
 
                                     {msg.type === 'IMAGE' && msg.attachmentUrl && (
@@ -275,6 +420,43 @@ export default function ChatWindow() {
                     onChange={handleFileUpload}
                 />
 
+                {/* Mention Dropdown */}
+                {mentionAnchor !== null && mentionQuery && (
+                    <div className="absolute bottom-[100%] left-4 right-4 mb-1 bg-surface-tertiary border border-border rounded-lg shadow-lg z-50 max-h-[200px] overflow-y-auto">
+                        <div className="py-1">
+                            {members
+                                .filter(m => m.name && m.name.toLowerCase().includes(mentionQuery.toLowerCase()))
+                                .slice(0, 10)
+                                .map(member => (
+                                    <div
+                                        key={member.id}
+                                        onClick={() => insertMention(member.id, member.name)}
+                                        className="px-3 py-2 hover:bg-primary/10 cursor-pointer text-sm text-text-primary flex items-center gap-2 transition-colors"
+                                    >
+                                        <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                                            {member.name?.[0]?.toUpperCase()}
+                                        </div>
+                                        <span>{member.name}</span>
+                                    </div>
+                                ))}
+                            {members.filter(m => m.name && m.name.toLowerCase().includes(mentionQuery.toLowerCase())).length === 0 && (
+                                <div className="px-3 py-2 text-sm text-text-muted">Нет совпадений</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Note Mode Indicator */}
+                {noteMode && (
+                    <div className="mb-2 px-3 py-2 rounded-lg bg-amber-100 text-amber-700 text-sm flex items-center gap-2 font-medium">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" opacity="0.3"/>
+                            <path d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                        </svg>
+                        Режим заметок (видно только операторам)
+                    </div>
+                )}
+
                 <div className="flex items-end gap-2 px-1">
                     <button
                         onClick={() => setShowQuickReplies(!showQuickReplies)}
@@ -298,11 +480,39 @@ export default function ChatWindow() {
                         </svg>
                     </button>
 
+                    <button
+                        onClick={() => setNoteMode(!noteMode)}
+                        disabled={!canSendMessage}
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0 border cursor-pointer shadow-sm ${
+                            noteMode
+                                ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                : 'bg-surface text-text-muted hover:text-amber-600 hover:bg-amber-50 border-border'
+                        }`}
+                        title="Заметка (видна только операторам)"
+                    >
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" opacity="0.3"/>
+                            <path d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                        </svg>
+                    </button>
+
+                    <button
+                        onClick={insertScreenShare}
+                        disabled={!canSendMessage}
+                        className="w-10 h-10 rounded-lg bg-surface text-text-muted hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all flex-shrink-0 border border-border cursor-pointer shadow-sm"
+                        title="Видео звонок (Jitsi Meet)"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                    </button>
+
                     <textarea
+                        ref={textareaRef}
                         value={text}
                         onChange={handleTextChange}
                         onKeyDown={handleKeyDown}
-                        placeholder={canSendMessage ? 'Введите сообщение...' : 'Закрытый чат. Отправка отключена'}
+                        placeholder={canSendMessage ? (noteMode ? 'Внутренняя заметка...' : 'Введите сообщение или введите @ для упоминания...') : 'Закрытый чат. Отправка отключена'}
                         rows={1}
                         disabled={!canSendMessage}
                         className="flex-1 px-4 py-2.5 rounded-lg bg-surface border border-border text-text-primary placeholder-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm min-h-[42px] shadow-sm"
@@ -312,6 +522,7 @@ export default function ChatWindow() {
                         onClick={handleSend}
                         disabled={!text.trim() || sending || !canSendMessage}
                         className="w-10 h-10 rounded-lg bg-primary hover:bg-primary-hover text-white flex items-center justify-center transition-all disabled:opacity-40 flex-shrink-0 border-none cursor-pointer shadow-md shadow-primary/20 "
+                        title={noteMode ? 'Отправить заметку (Ctrl+Enter)' : 'Отправить (Ctrl+Enter)'}
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

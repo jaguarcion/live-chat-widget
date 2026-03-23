@@ -8,15 +8,34 @@ import ChatWindow from '../components/ChatWindow';
 import VisitorInfo from '../components/VisitorInfo';
 import SettingsPage from './SettingsPage';
 import SearchPanel from '../components/SearchPanel';
+import AnalyticsPage from './AnalyticsPage';
+import LiveVisitorsPanel from '../components/LiveVisitorsPanel';
 
 export default function DashboardPage() {
     const { token } = useAuthStore();
-    const { fetchConversations, connectSocket, disconnectSocket, activeConversationId, conversations } = useChatStore();
+    const { fetchConversations, connectSocket, disconnectSocket, activeConversationId, conversations, setActiveConversation } = useChatStore();
     const [projects, setProjects] = useState<any[]>([]);
     const [showCreateProject, setShowCreateProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [creating, setCreating] = useState(false);
-    const [activeView, setActiveView] = useState<'chat' | 'settings' | 'dialogs' | 'channels' | 'search'>('chat');
+    const [activeView, setActiveView] = useState<'chat' | 'settings' | 'dialogs' | 'channels' | 'search' | 'analytics' | 'live-visitors'>('chat');
+
+    useEffect(() => {
+        // Global hotkey handlers
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'k' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                setActiveView('search');
+            }
+            if (e.key === 'Escape') {
+                if (activeView === 'search') setActiveView('chat');
+                else if (activeConversationId) setActiveConversation(null);
+                else if (activeView !== 'chat') setActiveView('chat');
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeView, activeConversationId]);
 
     useEffect(() => {
         loadProjects();
@@ -67,7 +86,11 @@ export default function DashboardPage() {
         <div className="flex h-screen w-full overflow-hidden">
             <Sidebar activeView={activeView} onViewChange={setActiveView} />
 
-            {activeView === 'settings' ? (
+            {activeView === 'analytics' ? (
+                <AnalyticsPage />
+            ) : activeView === 'live-visitors' ? (
+                <LiveVisitorsPanel />
+            ) : activeView === 'settings' ? (
                 <SettingsPage initialSection={'appearance'} />
             ) : activeView === 'search' ? (
                 <div className="flex flex-1 min-w-0">

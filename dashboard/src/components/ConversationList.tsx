@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useChatStore } from '../store/chatStore';
 import type { Conversation } from '../store/chatStore';
 
@@ -12,7 +12,7 @@ function timeAgo(dateStr: string): string {
     return `${Math.floor(hours / 24)}д`;
 }
 
-function ConversationItem({ conversation, isActive, isOnline }: { conversation: Conversation; isActive: boolean; isOnline: boolean }) {
+function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conversation: Conversation; isActive: boolean; isOnline: boolean; isTyping: boolean }) {
     const { setActiveConversation } = useChatStore();
     const lastMessage = conversation.messages[0];
 
@@ -35,6 +35,11 @@ function ConversationItem({ conversation, isActive, isOnline }: { conversation: 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
                         <span className="text-sm font-medium text-text-primary truncate flex items-center gap-1.5">
+                            {conversation.isPinned && (
+                                <svg className="w-4 h-4 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M5 5a2 2 0 012-2h6a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                </svg>
+                            )}
                             {conversation.visitor.name || conversation.visitor.email || `Посетитель`}
                             {isOnline && (
                                 <span className="relative flex h-2 w-2 flex-shrink-0">
@@ -48,7 +53,18 @@ function ConversationItem({ conversation, isActive, isOnline }: { conversation: 
                         </span>
                     </div>
                     <p className="text-xs text-text-secondary truncate">
-                        {lastMessage ? lastMessage.text : 'Нет сообщений'}
+                        {isTyping ? (
+                            <span className="flex items-center gap-1">
+                                <span>печатает</span>
+                                <span className="flex gap-0.5">
+                                    <span className="w-1 h-1 bg-orange-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
+                                    <span className="w-1 h-1 bg-orange-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
+                                    <span className="w-1 h-1 bg-orange-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
+                                </span>
+                            </span>
+                        ) : (
+                            lastMessage ? lastMessage.text : 'Нет сообщений'
+                        )}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
                         {!!conversation.unreadCount && conversation.unreadCount > 0 && (
@@ -57,6 +73,12 @@ function ConversationItem({ conversation, isActive, isOnline }: { conversation: 
                             </span>
                         )}
                         <span className="text-[10px] text-text-muted truncate">
+                            {conversation.status === 'OPEN' ? (
+                                <span className="text-success">Открыт</span>
+                            ) : (
+                                <span className="text-text-muted">Закрыт</span>
+                            )}
+                            {' • '}
                             {conversation.project.name}
                         </span>
                     </div>
@@ -67,9 +89,35 @@ function ConversationItem({ conversation, isActive, isOnline }: { conversation: 
 }
 
 export default function ConversationList() {
-    const { conversations, activeConversationId, loading, onlineVisitors } = useChatStore();
+    const { conversations, activeConversationId, loading, onlineVisitors, typingStatus } = useChatStore();
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
+    const [pinnedFilter, setPinnedFilter] = useState(false);
 
-    const visibleConversations = useMemo(() => conversations, [conversations]);
+    const visibleConversations = useMemo(() => {
+        let filtered = conversations;
+
+        // Apply status filter
+        if (statusFilter === 'OPEN') {
+            filtered = filtered.filter(c => c.status === 'OPEN');
+        } else if (statusFilter === 'CLOSED') {
+            filtered = filtered.filter(c => c.status === 'CLOSED');
+        }
+
+        // Apply pinned filter
+        if (pinnedFilter) {
+            filtered = filtered.filter(c => c.isPinned);
+        }
+
+        // Sort: pinned first, then by updatedAt
+        filtered.sort((a, b) => {
+            if (a.isPinned !== b.isPinned) {
+                return (a.isPinned ? 0 : 1) - (b.isPinned ? 0 : 1);
+            }
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        });
+
+        return filtered;
+    }, [conversations, statusFilter, pinnedFilter]);
 
     if (loading && conversations.length === 0) {
         return (
@@ -92,7 +140,58 @@ export default function ConversationList() {
     }
 
     return (
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col bg-surface">
+            {/* Filter Bar */}
+            <div className="px-4 py-3 border-b border-border bg-surface-secondary flex items-center gap-2 flex-shrink-0">
+                <button
+                    onClick={() => setStatusFilter('ALL')}
+                    className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${
+                        statusFilter === 'ALL'
+                            ? 'bg-primary text-white'
+                            : 'bg-surface text-text-secondary hover:bg-surface-tertiary'
+                    }`}
+                >
+                    Все
+                </button>
+                <button
+                    onClick={() => setStatusFilter('OPEN')}
+                    className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${
+                        statusFilter === 'OPEN'
+                            ? 'bg-success text-white'
+                            : 'bg-surface text-text-secondary hover:bg-surface-tertiary'
+                    }`}
+                >
+                    Открыты
+                </button>
+                <button
+                    onClick={() => setStatusFilter('CLOSED')}
+                    className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${
+                        statusFilter === 'CLOSED'
+                            ? 'bg-danger text-white'
+                            : 'bg-surface text-text-secondary hover:bg-surface-tertiary'
+                    }`}
+                >
+                    Закрыты
+                </button>
+
+                <div className="w-px h-4 bg-border mx-1"></div>
+
+                <button
+                    onClick={() => setPinnedFilter(!pinnedFilter)}
+                    className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium flex items-center gap-1 ${
+                        pinnedFilter
+                            ? 'bg-primary/20 text-primary'
+                            : 'bg-surface text-text-secondary hover:bg-surface-tertiary'
+                    }`}
+                >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M5 5a2 2 0 012-2h6a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    </svg>
+                    Закреп.
+                </button>
+            </div>
+
+            {/* Conversations List */}
             <div className="flex-1 overflow-y-auto">
                 {visibleConversations.length === 0 ? (
                     <div className="flex h-full items-center justify-center p-6 text-center text-sm text-text-muted">
@@ -104,6 +203,7 @@ export default function ConversationList() {
                     conversation={conv}
                     isActive={activeConversationId === conv.id}
                     isOnline={onlineVisitors.has(conv.visitorId)}
+                    isTyping={typingStatus[conv.id]?.isTyping || false}
                 />
                 ))}
             </div>

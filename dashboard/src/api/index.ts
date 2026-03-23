@@ -110,6 +110,26 @@ export const exportAutoActionTriggersCsv = (
 // Search
 export const searchConversations = (q: string) => api.get('/conversations/search', { params: { q } });
 
+// Conversation notes and pin
+export const sendNote = (conversationId: string, text: string, mentions?: string[]) =>
+    api.post(`/conversations/${conversationId}/notes`, { text, mentions });
+export const pinConversation = (conversationId: string) =>
+    api.patch(`/conversations/${conversationId}/pin`);
+
+// Analytics
+export const getAnalyticsOverview = (projectId: string, params?: { from?: string; to?: string }) =>
+    api.get(`/analytics/${projectId}/overview`, { params });
+export const getAnalyticsOperators = (projectId: string, params?: { from?: string; to?: string }) =>
+    api.get(`/analytics/${projectId}/operators`, { params });
+export const getAnalyticsDailyChart = (projectId: string, params?: { from?: string; to?: string }) =>
+    api.get(`/analytics/${projectId}/daily`, { params });
+export const exportConversations = (
+    projectId: string,
+    params?: { from?: string; to?: string; format?: 'csv' | 'json'; status?: string }
+) => api.get(`/analytics/${projectId}/export`, { params, responseType: 'blob' });
+export const getLiveVisitorsRest = (projectId: string) =>
+    api.get(`/analytics/${projectId}/live-visitors`);
+
 // Webhooks
 export const getWebhooks = (projectId: string) => api.get(`/webhooks/${projectId}`);
 export const createWebhook = (projectId: string, data: any) => api.post(`/webhooks/${projectId}`, data);

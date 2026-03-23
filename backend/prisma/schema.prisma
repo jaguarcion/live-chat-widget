@@ -115,6 +115,7 @@ model Conversation {
   visitorId  String
   operatorId String?
   status     String    @default("OPEN")
+  isPinned   Boolean   @default(false)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   operator   User?     @relation("AssignedOperator", fields: [operatorId], references: [id])
@@ -131,10 +132,14 @@ model Message {
   type           String       @default("TEXT")
   attachmentUrl  String?      @db.Text
   isRead         Boolean      @default(false)
+  isNote         Boolean      @default(false)
+  mentions       String?      @db.Text // JSON array of userIds
   createdAt      DateTime     @default(now())
   senderId       String?
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User?        @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId, isNote])
 }
 
 model QuickReply {

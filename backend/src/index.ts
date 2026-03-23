@@ -17,6 +17,7 @@ import memberRoutes from './routes/members';
 import webhookRoutes from './routes/webhooks';
 import autoActionRoutes from './routes/autoActions';
 import uploadRoutes from './routes/upload';
+import analyticsRoutes from './routes/analytics';
 import { setupSockets } from './sockets';
 import { setIO } from './socketInstance';
 import { parseOriginAllowlist } from './config/security';
@@ -125,6 +126,7 @@ app.use('/api/projects', memberRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/auto-actions', autoActionRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/', (req, res) => {
   res.send('LiveChat API is running');

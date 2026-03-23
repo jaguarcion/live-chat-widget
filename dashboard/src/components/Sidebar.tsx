@@ -5,8 +5,8 @@ import { useThemeStore } from '../store/themeStore';
 import { useNavigate } from 'react-router-dom';
 
 interface SidebarProps {
-    activeView: 'chat' | 'settings' | 'dialogs' | 'channels' | 'search';
-    onViewChange: (view: 'chat' | 'settings' | 'dialogs' | 'channels' | 'search') => void;
+    activeView: 'chat' | 'settings' | 'dialogs' | 'channels' | 'search' | 'analytics' | 'live-visitors';
+    onViewChange: (view: 'chat' | 'settings' | 'dialogs' | 'channels' | 'search' | 'analytics' | 'live-visitors') => void;
 }
 
 export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
@@ -190,6 +190,30 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                                         {totalUnread}
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="px-3 py-4 border-t border-border/50">
+                        <div className="text-[11px] font-bold text-text-muted mb-3 uppercase tracking-wider px-2">Аналитика</div>
+                        <div className="space-y-1 text-[15px]">
+                            <div
+                                onClick={() => onViewChange('analytics')}
+                                className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${activeView === 'analytics' ? 'bg-primary/10 text-primary font-semibold' : 'text-text-secondary hover:bg-surface-secondary transition-colors font-semibold'}`}
+                            >
+                                <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                                Аналитика
+                            </div>
+                            <div
+                                onClick={() => onViewChange('live-visitors')}
+                                className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${activeView === 'live-visitors' ? 'bg-primary/10 text-primary font-semibold' : 'text-text-secondary hover:bg-surface-secondary transition-colors font-semibold'}`}
+                            >
+                                <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                </svg>
+                                Посетители
                             </div>
                         </div>
                     </div>

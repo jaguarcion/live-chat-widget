@@ -18,8 +18,15 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
         });
         const projectIds = memberships.map(m => m.projectId);
 
+        // Build optional filters
+        const where: any = { projectId: { in: projectIds } };
+        if (req.query.status && req.query.status !== 'ALL') where.status = req.query.status;
+        if (req.query.operatorId === 'me') where.operatorId = userId;
+        else if (req.query.operatorId === 'unassigned') where.operatorId = null;
+        if (req.query.isPinned === 'true') where.isPinned = true;
+
         const conversations = await prisma.conversation.findMany({
-            where: { projectId: { in: projectIds } },
+            where,
             include: {
                 visitor: true,
                 operator: { select: { id: true, name: true, email: true } },
@@ -29,7 +36,7 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
                     take: 1
                 }
             },
-            orderBy: { updatedAt: 'desc' }
+            orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }]
         });
 
         const conversationsWithUnread = await Promise.all(conversations.map(async (conv: any) => {
@@ -373,6 +380,86 @@ export const searchConversations = async (req: AuthRequest, res: Response): Prom
         });
     } catch (error) {
         console.error('Search error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// POST /api/conversations/:id/notes — send internal operator note
+export const sendNote = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const { id } = req.params;
+        const { text, mentions } = req.body;
+
+        if (!text?.trim()) { res.status(400).json({ error: 'Note text is required' }); return; }
+
+        const canAccess = await hasConversationAccess(userId, id);
+        if (!canAccess) { res.status(403).json({ error: 'Forbidden' }); return; }
+
+        const conversation = await prisma.conversation.findUnique({ where: { id }, select: { projectId: true } });
+        if (!conversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
+
+        const message = await (prisma.message as any).create({
+            data: {
+                conversationId: id,
+                text: text.trim(),
+                type: 'TEXT',
+                sender: 'OPERATOR',
+                senderId: userId,
+                isNote: true,
+                mentions: Array.isArray(mentions) && mentions.length ? JSON.stringify(mentions) : null,
+            },
+            include: {
+                user: { select: { id: true, name: true, avatarUrl: true, title: true } }
+            }
+        });
+
+        const io = getIO();
+        io.to(`project_${conversation.projectId}`).emit('operator_note', message);
+
+        if (Array.isArray(mentions)) {
+            for (const mentionedUserId of mentions) {
+                io.to(`operator_${mentionedUserId}`).emit('operator_mention', {
+                    conversationId: id,
+                    noteId: message.id,
+                    fromUserId: userId,
+                    text: text.trim(),
+                });
+            }
+        }
+
+        logEvent(conversation.projectId, 'NOTE_SENT', { messageId: message.id, userId, conversationId: id });
+        res.status(201).json(message);
+    } catch (error) {
+        console.error('Send note error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// PATCH /api/conversations/:id/pin — toggle pin
+export const pinConversation = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const { id } = req.params;
+        const canAccess = await hasConversationAccess(userId, id);
+        if (!canAccess) { res.status(403).json({ error: 'Forbidden' }); return; }
+
+        const existing = await prisma.conversation.findUnique({ where: { id }, select: { isPinned: true } } as any);
+        if (!existing) { res.status(404).json({ error: 'Not found' }); return; }
+
+        const updated = await (prisma.conversation as any).update({
+            where: { id },
+            data: { isPinned: !(existing as any).isPinned },
+            select: { id: true, isPinned: true }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Pin conversation error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
