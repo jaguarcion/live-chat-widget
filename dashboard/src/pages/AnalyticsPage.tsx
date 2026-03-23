@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { useNavigate, useParams } from 'react-router-dom';
 import { subDays, format } from 'date-fns';
 import {
     getAnalyticsOverview,
@@ -11,7 +10,6 @@ import {
 
 export default function AnalyticsPage() {
     const { user } = useAuthStore();
-    const navigate = useNavigate();
     const [activeProject, setActiveProject] = useState<string>('');
     const [fromDate, setFromDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
     const [toDate, setToDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -20,6 +18,8 @@ export default function AnalyticsPage() {
     const [operators, setOperators] = useState<any>([]);
     const [daily, setDaily] = useState<any>([]);
     const [loading, setLoading] = useState(false);
+
+    const projects = (user as any)?.memberships || [];
 
     const loadData = async () => {
         if (!activeProject) return;
@@ -86,7 +86,7 @@ export default function AnalyticsPage() {
                                 className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm"
                             >
                                 <option value="">Выберите проект</option>
-                                {user?.memberships?.map((m: any) => (
+                                {projects?.map((m: any) => (
                                     <option key={m.projectId} value={m.projectId}>{m.project?.name || m.projectId}</option>
                                 ))}
                             </select>

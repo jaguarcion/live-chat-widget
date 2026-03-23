@@ -65,7 +65,7 @@ export default function ChatWindow() {
                 // Send as regular message
                 const { data } = await sendMessageAPI(activeConversationId, text.trim());
                 addMessage(data);
-                mentions.forEach(userId => playNotificationSound('mention'));
+                if (mentions.length > 0) playNotificationSound('mention');
             }
             
             setText('');
@@ -134,8 +134,10 @@ export default function ChatWindow() {
     const handlePin = async () => {
         if (!activeConversationId) return;
         try {
+            const conversation = conversations.find(c => c.id === activeConversationId);
+            const newPinnedState = !conversation?.isPinned;
             await pinConversation(activeConversationId);
-            updateConversationPin(activeConversationId);
+            updateConversationPin(activeConversationId, newPinnedState);
         } catch (err) {
             console.error('Pin error:', err);
         }

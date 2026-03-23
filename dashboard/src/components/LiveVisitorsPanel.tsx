@@ -1,9 +1,7 @@
 import { useChatStore } from '../store/chatStore';
-import { useAuthStore } from '../store/authStore';
 
 export default function LiveVisitorsPanel() {
     const { liveVisitors, setActiveConversation } = useChatStore();
-    const { user } = useAuthStore();
 
     if (liveVisitors.length === 0) {
         return (
