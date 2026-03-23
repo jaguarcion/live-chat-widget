@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
@@ -16,7 +16,33 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
-function App() {
+function StyleManager() {
+  const location = useLocation();
+
+  useEffect(() => {
+    // Remove landing styles link if it exists
+    let landingLink = document.getElementById('landing-styles') as HTMLLinkElement | null;
+    
+    // Check if current route is a landing page
+    const isLandingRoute = ['/', '/landing2', '/interactive-demo'].includes(location.pathname);
+    
+    if (isLandingRoute && !landingLink) {
+      // Add landing styles
+      landingLink = document.createElement('link') as HTMLLinkElement;
+      landingLink.id = 'landing-styles';
+      landingLink.rel = 'stylesheet';
+      landingLink.href = '/src/landing.css';
+      document.head.appendChild(landingLink);
+    } else if (!isLandingRoute && landingLink) {
+      // Remove landing styles
+      landingLink.remove();
+    }
+  }, [location.pathname]);
+
+  return null;
+}
+
+function AppRoutes() {
   const { isAuthenticated, fetchUser, initialize } = useAuthStore();
   const { theme } = useThemeStore();
 
@@ -39,7 +65,8 @@ function App() {
   }, [theme]);
 
   return (
-    <BrowserRouter>
+    <>
+      <StyleManager />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/landing2" element={<LandingPage2 />} />
@@ -55,6 +82,14 @@ function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
     </BrowserRouter>
   );
 }
