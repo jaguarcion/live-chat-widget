@@ -199,15 +199,63 @@ export default function LandingPage2() {
                                 <span />
                             </div>
                             <div className="landing2-mock-content">
-                                <div className="landing2-mock-sidebar" />
+                                <div className="landing2-mock-sidebar">
+                                    <div className="landing2-mock-sidebar-title">Входящие</div>
+                                    <div className="landing2-mock-thread landing2-mock-thread-active">
+                                        <div className="landing2-mock-avatar">IK</div>
+                                        <div className="landing2-mock-thread-body">
+                                            <strong>Ирина К.</strong>
+                                            <span>Нужна интеграция с CRM</span>
+                                        </div>
+                                        <div className="landing2-mock-thread-badge">2</div>
+                                    </div>
+                                    <div className="landing2-mock-thread">
+                                        <div className="landing2-mock-avatar landing2-mock-avatar-muted">DP</div>
+                                        <div className="landing2-mock-thread-body">
+                                            <strong>Дмитрий П.</strong>
+                                            <span>Ожидает ответа</span>
+                                        </div>
+                                    </div>
+                                    <div className="landing2-mock-thread">
+                                        <div className="landing2-mock-avatar landing2-mock-avatar-muted">AN</div>
+                                        <div className="landing2-mock-thread-body">
+                                            <strong>Анастасия</strong>
+                                            <span>Новый лид из виджета</span>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div className="landing2-mock-main">
-                                    <div className="landing2-chat-bubble landing2-chat-left">
-                                        Здравствуйте! Подскажите про интеграции
+                                    <div className="landing2-chat-timeline">сейчас online</div>
+                                    <div className="landing2-chat-message landing2-chat-left landing2-chat-step-1">
+                                        <span className="landing2-chat-author">Ирина, клиент</span>
+                                        <p>Здравствуйте! Подскажите, у вас есть интеграции с CRM и мессенджерами?</p>
+                                        <span className="landing2-chat-time">14:02</span>
                                     </div>
-                                    <div className="landing2-chat-bubble landing2-chat-right">
-                                        Подключаем весь стек: Email, Telegram, Slack и еще 10+ каналов.
+                                    <div className="landing2-chat-typing landing2-chat-step-2" aria-hidden="true">
+                                        <span />
+                                        <span />
+                                        <span />
                                     </div>
-                                    <div className="landing2-chat-typing">Печатает...</div>
+                                    <div className="landing2-chat-message landing2-chat-right landing2-chat-step-3">
+                                        <span className="landing2-chat-author">LiveChat OS</span>
+                                        <p>Да, подключаем CRM, Email, Telegram, Slack и ещё 10+ каналов в одном окне.</p>
+                                        <span className="landing2-chat-time">14:02</span>
+                                    </div>
+                                    <div className="landing2-chat-message landing2-chat-left landing2-chat-step-4">
+                                        <span className="landing2-chat-author">Ирина, клиент</span>
+                                        <p>Отлично. А можно автоматически назначать менеджера на новый диалог?</p>
+                                        <span className="landing2-chat-time">14:03</span>
+                                    </div>
+                                    <div className="landing2-chat-typing landing2-chat-step-5 landing2-chat-typing-right" aria-hidden="true">
+                                        <span />
+                                        <span />
+                                        <span />
+                                    </div>
+                                    <div className="landing2-chat-message landing2-chat-right landing2-chat-step-6">
+                                        <span className="landing2-chat-author">LiveChat OS</span>
+                                        <p>Да. Назначение, теги, автоответы и маршрутизация запускаются по правилам за пару секунд.</p>
+                                        <span className="landing2-chat-time">14:03</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -263,8 +311,104 @@ export default function LandingPage2() {
                                     <span />
                                 </div>
                                 <div className="landing2-mock-content landing2-full-height">
-                                    <div style={{ padding: '1rem', fontSize: '0.9rem', color: '#888' }}>
-                                        Рабочее пространство с диалогами, операторами и аналитикой
+                                    <div className="landing2-workspace-shell">
+                                        <div className="landing2-workspace-topbar">
+                                            <div>
+                                                <strong>Рабочее пространство</strong>
+                                                <span>Диалоги, операторы и аналитика в одном окне</span>
+                                            </div>
+                                            <div className="landing2-workspace-filter">SLA 98.4%</div>
+                                        </div>
+
+                                        <div className="landing2-workspace-stats">
+                                            <div className="landing2-workspace-stat-card">
+                                                <span>Новые диалоги</span>
+                                                <strong>124</strong>
+                                                <em>+18% за день</em>
+                                            </div>
+                                            <div className="landing2-workspace-stat-card">
+                                                <span>Средний ответ</span>
+                                                <strong>38 сек</strong>
+                                                <em>ниже цели SLA</em>
+                                            </div>
+                                            <div className="landing2-workspace-stat-card">
+                                                <span>Онлайн операторов</span>
+                                                <strong>12</strong>
+                                                <em>3 в премиум-линии</em>
+                                            </div>
+                                        </div>
+
+                                        <div className="landing2-workspace-grid">
+                                            <div className="landing2-workspace-column landing2-workspace-column-list">
+                                                <div className="landing2-workspace-column-title">Очередь</div>
+                                                <div className="landing2-workspace-ticket landing2-workspace-ticket-active">
+                                                    <div className="landing2-workspace-ticket-head">
+                                                        <strong>Ирина Кузнецова</strong>
+                                                        <span>14:03</span>
+                                                    </div>
+                                                    <p>Нужна интеграция с amoCRM и Telegram-ботом</p>
+                                                    <div className="landing2-workspace-ticket-tags">
+                                                        <span>amoCRM</span>
+                                                        <span>Telegram</span>
+                                                    </div>
+                                                </div>
+                                                <div className="landing2-workspace-ticket">
+                                                    <div className="landing2-workspace-ticket-head">
+                                                        <strong>Новый лид</strong>
+                                                        <span>13:58</span>
+                                                    </div>
+                                                    <p>Переход с лендинга. Интересуется тарифом Business.</p>
+                                                </div>
+                                                <div className="landing2-workspace-ticket">
+                                                    <div className="landing2-workspace-ticket-head">
+                                                        <strong>Техподдержка</strong>
+                                                        <span>13:51</span>
+                                                    </div>
+                                                    <p>Нужно передать диалог в отдел интеграций.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="landing2-workspace-column landing2-workspace-column-chat">
+                                                <div className="landing2-workspace-conversation-title">
+                                                    <strong>Сделка: интеграции и автоназначение</strong>
+                                                    <span>В работе у Анны Смирновой</span>
+                                                </div>
+                                                <div className="landing2-workspace-conversation">
+                                                    <div className="landing2-workspace-message landing2-workspace-message-incoming">
+                                                        <span>Клиент</span>
+                                                        <p>Подскажите, можно ли автоматически назначать менеджера на новый чат?</p>
+                                                    </div>
+                                                    <div className="landing2-workspace-message landing2-workspace-message-outgoing">
+                                                        <span>Анна</span>
+                                                        <p>Да, по отделу, источнику трафика, тегу или расписанию. Правила срабатывают сразу.</p>
+                                                    </div>
+                                                    <div className="landing2-workspace-message landing2-workspace-message-incoming">
+                                                        <span>Клиент</span>
+                                                        <p>Тогда супер, нам это как раз нужно для продаж и поддержки.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="landing2-workspace-column landing2-workspace-column-side">
+                                                <div className="landing2-workspace-agent-card">
+                                                    <div className="landing2-workspace-agent-avatar">AS</div>
+                                                    <div>
+                                                        <strong>Анна Смирнова</strong>
+                                                        <span>Senior sales manager</span>
+                                                    </div>
+                                                </div>
+                                                <div className="landing2-workspace-side-panel">
+                                                    <span>Автоматизации</span>
+                                                    <strong>4 правила активны</strong>
+                                                    <p>Назначение оператора, welcome-сообщение, теги и webhook в CRM.</p>
+                                                </div>
+                                                <div className="landing2-workspace-side-panel">
+                                                    <span>Интеграции</span>
+                                                    <strong>amoCRM, Telegram, Email</strong>
+                                                    <p>Данные клиента и история сообщений синхронизируются без ручной передачи.</p>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -319,11 +463,6 @@ export default function LandingPage2() {
                         ))}
                     </div>
 
-                    <div className="landing2-comparison">
-                        <p>
-                            <Link to="/pricing">Сравнить все функции в деталях →</Link>
-                        </p>
-                    </div>
                 </div>
             </section>
 
