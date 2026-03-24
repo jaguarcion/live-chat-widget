@@ -35,11 +35,6 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
                         <span className="text-sm font-medium text-text-primary truncate flex items-center gap-1.5">
-                            {conversation.isPinned && (
-                                <svg className="w-4 h-4 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M5 5a2 2 0 012-2h6a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                                </svg>
-                            )}
                             {conversation.visitor.name || conversation.visitor.email || `Посетитель`}
                             {isOnline && (
                                 <span className="relative flex h-2 w-2 flex-shrink-0">
@@ -91,7 +86,6 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
 export default function ConversationList() {
     const { conversations, activeConversationId, loading, onlineVisitors, typingStatus } = useChatStore();
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
-    const [pinnedFilter, setPinnedFilter] = useState(false);
 
     const visibleConversations = useMemo(() => {
         let filtered = conversations;
@@ -103,21 +97,11 @@ export default function ConversationList() {
             filtered = filtered.filter(c => c.status === 'CLOSED');
         }
 
-        // Apply pinned filter
-        if (pinnedFilter) {
-            filtered = filtered.filter(c => c.isPinned);
-        }
-
-        // Sort: pinned first, then by updatedAt
-        filtered.sort((a, b) => {
-            if (a.isPinned !== b.isPinned) {
-                return (a.isPinned ? 0 : 1) - (b.isPinned ? 0 : 1);
-            }
-            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        });
+        // Sort by most recently updated
+        filtered.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
         return filtered;
-    }, [conversations, statusFilter, pinnedFilter]);
+    }, [conversations, statusFilter]);
 
     if (loading && conversations.length === 0) {
         return (
@@ -172,22 +156,6 @@ export default function ConversationList() {
                     }`}
                 >
                     Закрыты
-                </button>
-
-                <div className="w-px h-4 bg-border mx-1"></div>
-
-                <button
-                    onClick={() => setPinnedFilter(!pinnedFilter)}
-                    className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium flex items-center gap-1 ${
-                        pinnedFilter
-                            ? 'bg-primary/20 text-primary'
-                            : 'bg-surface text-text-secondary hover:bg-surface-tertiary'
-                    }`}
-                >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M5 5a2 2 0 012-2h6a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                    </svg>
-                    Закреп.
                 </button>
             </div>
 

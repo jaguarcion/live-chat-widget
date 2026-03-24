@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '../store/chatStore';
-import { sendMessage as sendMessageAPI, uploadFile, sendNote, pinConversation, getProjectMembers } from '../api';
+import { sendMessage as sendMessageAPI, uploadFile, sendNote, getProjectMembers } from '../api';
 import { playNotificationSound } from '../utils/soundUtils';
 import QuickRepliesPanel from './QuickRepliesPanel';
 
 export default function ChatWindow() {
-    const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping, addNote, updateConversationPin } = useChatStore();
+    const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping, addNote } = useChatStore();
     const [text, setText] = useState('');
     const [noteMode, setNoteMode] = useState(false);
     const [members, setMembers] = useState<any[]>([]);
@@ -130,18 +130,6 @@ export default function ChatWindow() {
         }, 0);
     };
 
-    const handlePin = async () => {
-        if (!activeConversationId) return;
-        try {
-            const conversation = conversations.find(c => c.id === activeConversationId);
-            const newPinnedState = !conversation?.isPinned;
-            await pinConversation(activeConversationId);
-            updateConversationPin(activeConversationId, newPinnedState);
-        } catch (err) {
-            console.error('Pin error:', err);
-        }
-    };
-
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !activeConversationId || !canSendMessage) return;
@@ -254,15 +242,6 @@ export default function ChatWindow() {
                     <p className="text-xs text-text-muted mt-0.5">{activeConversation?.project.name}</p>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
-                    <button
-                        onClick={handlePin}
-                        title={activeConversation?.isPinned ? 'Открепить' : 'Закрепить'}
-                        className="p-2 rounded-lg hover:bg-primary/10 text-text-muted hover:text-primary transition-colors"
-                    >
-                        <svg className={`w-5 h-5 ${activeConversation?.isPinned ? 'text-primary fill-current' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h6a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                        </svg>
-                    </button>
                     <span className={`text-xs px-2 py-1 rounded-full ${activeConversation?.status === 'OPEN'
                         ? 'bg-success/15 text-success'
                         : 'bg-text-muted/15 text-text-muted'
@@ -284,6 +263,33 @@ export default function ChatWindow() {
                         new Date(prev.createdAt).toDateString() !== new Date(msg.createdAt).toDateString();
 
                     const isJoin = msg.type === 'OPERATOR_JOIN';
+                    const isSystem = msg.type === 'SYSTEM';
+
+                    if (isSystem) {
+                        return (
+                            <div key={msg.id}>
+                                {showDateSeparator && (
+                                    <div className="relative my-4">
+                                        <div className="h-px bg-border" />
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span className="px-3 text-sm font-semibold text-text-primary bg-surface leading-none">
+                                                {formatMsgDate(msg.createdAt)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex justify-center my-2">
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-600 text-xs max-w-[90%]">
+                                        <svg className="w-3.5 h-3.5 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="truncate">{msg.text}</span>
+                                        <span className="flex-shrink-0 opacity-60">{formatMsgTime(msg.createdAt)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
 
                     if (isJoin) {
                         return (
@@ -311,10 +317,10 @@ export default function ChatWindow() {
                                     </div>
                                     <div className="min-w-0">
                                         <div className="flex items-baseline gap-2 flex-wrap">
-                                            <span className="text-[15px] font-semibold text-text-primary leading-none">{msg.user?.name || 'Оператор'}</span>
-                                            <span className="text-[13px] text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
+                                            <span className="text-sm font-semibold text-text-primary leading-none">{msg.user?.name || 'Оператор'}</span>
+                                            <span className="text-xs text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
                                         </div>
-                                        <div className="text-[13px] italic text-text-muted mt-0.5 leading-none">теперь в чате</div>
+                                        <div className="text-xs italic text-text-muted mt-0.5 leading-none">теперь в чате</div>
                                     </div>
                                 </div>
                             </div>
@@ -341,12 +347,12 @@ export default function ChatWindow() {
                                         msg.user?.avatarUrl ? (
                                             <img src={msg.user.avatarUrl} className="w-9 h-9 rounded-full object-cover" alt="" />
                                         ) : (
-                                            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-[12px] font-bold text-white">
+                                            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-white">
                                                 {msg.user?.name?.[0] || 'O'}
                                             </div>
                                         )
                                     ) : (
-                                        <div className="w-9 h-9 rounded-full bg-border flex items-center justify-center text-[12px] font-bold text-text-muted">
+                                        <div className="w-9 h-9 rounded-full bg-border flex items-center justify-center text-xs font-bold text-text-muted">
                                             {activeConversation?.visitor.name?.[0] || 'V'}
                                         </div>
                                     )}
@@ -354,12 +360,17 @@ export default function ChatWindow() {
 
                                 <div className="min-w-0 max-w-full">
                                     <div className="flex items-baseline gap-2 flex-wrap">
-                                        <span className="text-[15px] font-semibold text-text-primary leading-none">
+                                        <span className="text-sm font-semibold text-text-primary leading-none">
                                             {msg.sender === 'OPERATOR'
                                                 ? (msg.user?.name || 'Оператор')
                                                 : (activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель')}
                                         </span>
-                                        <span className="text-[13px] text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
+                                        <span className="text-xs text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
+                                        {msg.isAutomatic && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold leading-none flex-shrink-0">
+                                                авто
+                                            </span>
+                                        )}
                                         {msg.isNote && (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold flex items-center gap-1 leading-none">
                                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -390,7 +401,7 @@ export default function ChatWindow() {
                                         </a>
                                     )}
 
-                                    {msg.text && <p className="break-words text-[16px] leading-snug whitespace-pre-wrap text-text-primary">{msg.text}</p>}
+                                    {msg.text && <p className="break-words text-sm leading-normal whitespace-pre-wrap text-text-primary">{msg.text}</p>}
                                     </div>
                                 </div>
                             </div>
@@ -407,7 +418,7 @@ export default function ChatWindow() {
                             <span className="text-sm font-semibold text-text-primary">
                                 {activeConversation?.visitor?.name || 'Посетитель'}
                             </span>
-                            <span className="text-[12px] text-text-muted italic">печатает...</span>
+                            <span className="text-xs text-text-muted italic">печатает...</span>
                         </div>
                         <div className="ml-10 text-sm text-text-muted opacity-70 break-words max-w-[80%] line-clamp-3">
                             {typingStatus[activeConversationId]?.text || '...'}

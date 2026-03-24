@@ -9,10 +9,11 @@ export interface Message {
     conversationId: string;
     sender: string;
     text: string | null;
-    type: 'TEXT' | 'IMAGE' | 'FILE' | 'OPERATOR_JOIN';
+    type: 'TEXT' | 'IMAGE' | 'FILE' | 'OPERATOR_JOIN' | 'SYSTEM';
     attachmentUrl?: string | null;
     isRead: boolean;
     isNote?: boolean;
+    isAutomatic?: boolean;
     mentions?: string | null; // JSON array of userIds
     createdAt: string;
     senderId?: string;
@@ -90,7 +91,6 @@ interface ChatState {
     fetchMessages: (conversationId: string) => Promise<void>;
     addMessage: (message: Message) => void;
     addNote: (message: Message) => void;
-    updateConversationPin: (conversationId: string, isPinned: boolean) => void;
     connectSocket: (token: string, projectIds: string[]) => void;
     disconnectSocket: () => void;
     sendTyping: (conversationId: string, isTyping: boolean) => void;
@@ -182,11 +182,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                             : c.unreadCount
                     }
                     : c
-            ).sort((a, b) => {
-                if (a.isPinned && !b.isPinned) return -1;
-                if (!a.isPinned && b.isPinned) return 1;
-                return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-            })
+            ).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
         });
 
         if (isNewFromVisitor) {
@@ -207,18 +203,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 set({ messages: [...state.messages, message] });
             }
         }
-    },
-
-    updateConversationPin: (conversationId: string, isPinned: boolean) => {
-        set(state => ({
-            conversations: state.conversations.map(c =>
-                c.id === conversationId ? { ...c, isPinned } : c
-            ).sort((a, b) => {
-                if (a.isPinned && !b.isPinned) return -1;
-                if (!a.isPinned && b.isPinned) return 1;
-                return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-            })
-        }));
     },
 
     clearMention: (noteId: string) => {
