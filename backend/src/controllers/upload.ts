@@ -33,10 +33,20 @@ const OPERATOR_QUOTA_MAX_FILES = 120;
 const OPERATOR_QUOTA_MAX_BYTES = 250 * 1024 * 1024;
 
 const resolveMediaBaseUrl = (req: Request): string => {
-    if (MEDIA_BASE_URL) return MEDIA_BASE_URL;
+    if (MEDIA_BASE_URL) {
+        // If configured URL is localhost but the request came in over HTTPS
+        // (i.e. we are behind a TLS-terminating reverse proxy), upgrade the scheme.
+        const forwarded = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
+        if (forwarded === 'https' && MEDIA_BASE_URL.startsWith('http://')) {
+            return MEDIA_BASE_URL.replace(/^http:\/\//, 'https://');
+        }
+        return MEDIA_BASE_URL;
+    }
 
-    const protocol = req.protocol;
-    const host = req.get('host');
+    // No MEDIA_BASE_URL configured — derive from request
+    const forwarded = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim();
+    const protocol = forwarded || req.protocol;
+    const host = req.get('x-forwarded-host') || req.get('host');
     return `${protocol}://${host}`;
 };
 
