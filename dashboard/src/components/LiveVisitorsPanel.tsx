@@ -1,4 +1,5 @@
 import { useChatStore } from '../store/chatStore';
+import { getDiceBearUrl } from '../utils/avatarUtils';
 
 export default function LiveVisitorsPanel() {
     const { liveVisitors, setActiveConversation } = useChatStore();
@@ -31,11 +32,11 @@ export default function LiveVisitorsPanel() {
                     >
                         <div className="flex items-center gap-3 mb-2">
                             <div className="relative">
-                                <div className="w-10 h-10 rounded-full bg-surface-secondary flex items-center justify-center border border-border">
-                                    <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                </div>
+                                <img
+                                    src={getDiceBearUrl(visitor.name || visitor.email || visitor.visitorId)}
+                                    className="w-10 h-10 rounded-full"
+                                    alt=""
+                                />
                                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full ring-2 ring-white" />
                             </div>
                             <div className="flex-1 min-w-0">

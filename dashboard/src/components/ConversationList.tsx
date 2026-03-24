@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useChatStore } from '../store/chatStore';
 import type { Conversation } from '../store/chatStore';
+import { getDiceBearUrl } from '../utils/avatarUtils';
 
 function timeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -26,11 +27,11 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
         >
             <div className="flex items-start gap-2.5">
                 {/* Avatar */}
-                <div className="w-8 h-8 rounded-full bg-surface-tertiary flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <svg className="w-4 h-4 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                </div>
+                <img
+                    src={getDiceBearUrl(conversation.visitor.name || conversation.visitor.email || conversation.visitor.id)}
+                    className="w-8 h-8 rounded-full flex-shrink-0 mt-0.5"
+                    alt=""
+                />
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">

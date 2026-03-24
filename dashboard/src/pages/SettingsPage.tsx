@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { getProjects, getProjectSettings, updateProjectSettings, getProjectMembers, addProjectMember, updateProjectMember, removeProjectMember, getWebhooks, createWebhook, deleteWebhook, uploadFile, createProject, getAutoActions, getAutoActionTriggers, updateAutoActions, exportAutoActionTriggersCsv } from '../api';
+import { getAvatarSrc } from '../utils/avatarUtils';
 
 interface BusinessHour {
     day: number;
@@ -1322,12 +1323,8 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                                                 className="flex items-center justify-between p-4 bg-surface-tertiary rounded-xl border border-border cursor-pointer hover:border-primary/50 transition-colors"
                                             >
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-full overflow-hidden bg-primary flex items-center justify-center text-white font-bold text-lg">
-                                                        {m.user?.avatarUrl ? (
-                                                            <img src={m.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            m.user?.name?.[0] || 'U'
-                                                        )}
+                                                    <div className="w-12 h-12 rounded-full overflow-hidden">
+                                                        <img src={getAvatarSrc(m.user?.avatarUrl, m.user?.name || m.user?.email)} alt="Avatar" className="w-full h-full object-cover" />
                                                     </div>
                                                     <div>
                                                         <div className="text-base font-semibold text-text-primary flex items-center gap-2">
@@ -1392,12 +1389,8 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                                         <div className="flex flex-col md:flex-row gap-6">
                                             {/* Avatar Upload */}
                                             <div className="flex flex-col items-center gap-3 w-48 shrink-0">
-                                                <div className="w-32 h-32 rounded-full overflow-hidden bg-surface-secondary border-2 border-border shadow-lg flex items-center justify-center text-4xl text-white font-bold">
-                                                    {editingMember.user?.avatarUrl ? (
-                                                        <img src={editingMember.user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        editingMember.user?.name?.[0] || 'U'
-                                                    )}
+                                                <div className="w-32 h-32 rounded-full overflow-hidden bg-surface-secondary border-2 border-border shadow-lg">
+                                                    <img src={getAvatarSrc(editingMember.user?.avatarUrl, editingMember.user?.name || editingMember.user?.email)} alt="Avatar" className="w-full h-full object-cover" />
                                                 </div>
                                                 <input
                                                     type="file"

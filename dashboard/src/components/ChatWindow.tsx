@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '../store/chatStore';
 import { sendMessage as sendMessageAPI, uploadFile, sendNote, getProjectMembers } from '../api';
 import { playNotificationSound } from '../utils/soundUtils';
+import { getAvatarSrc, getDiceBearUrl } from '../utils/avatarUtils';
 import QuickRepliesPanel from './QuickRepliesPanel';
 
 export default function ChatWindow() {
@@ -230,11 +231,11 @@ export default function ChatWindow() {
 
             {/* Header */}
             <div className="px-4 md:px-6 py-3 border-b border-border bg-surface flex items-center gap-3 z-10">
-                <div className="w-10 h-10 rounded-full bg-surface-tertiary flex items-center justify-center border border-border">
-                    <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                </div>
+                <img
+                    src={getDiceBearUrl(activeConversation?.visitor.name || activeConversation?.visitor.email || activeConversation?.visitor.id)}
+                    className="w-10 h-10 rounded-full"
+                    alt=""
+                />
                 <div>
                     <h3 className="text-[13px] font-semibold text-text-primary leading-[1.3]">
                         {activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель'}
@@ -307,13 +308,11 @@ export default function ChatWindow() {
 
                                 <div className="flex gap-3 py-2.5">
                                     <div className="flex-shrink-0 mt-0.5">
-                                        {msg.user?.avatarUrl ? (
-                                            <img src={msg.user.avatarUrl} className="w-9 h-9 rounded-full object-cover" alt="Avatar" />
-                                        ) : (
-                                            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-white">
-                                                {msg.user?.name?.[0] || 'O'}
-                                            </div>
-                                        )}
+                                        <img
+                                            src={getAvatarSrc(msg.user?.avatarUrl, msg.user?.name || msg.user?.title)}
+                                            className="w-9 h-9 rounded-full object-cover"
+                                            alt=""
+                                        />
                                     </div>
                                     <div className="min-w-0">
                                         <div className="flex items-baseline gap-2 flex-wrap">
@@ -344,17 +343,17 @@ export default function ChatWindow() {
                                 {/* Avatar */}
                                 <div className="flex-shrink-0 mt-0.5">
                                     {msg.sender === 'OPERATOR' ? (
-                                        msg.user?.avatarUrl ? (
-                                            <img src={msg.user.avatarUrl} className="w-9 h-9 rounded-full object-cover" alt="" />
-                                        ) : (
-                                            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-white">
-                                                {msg.user?.name?.[0] || 'O'}
-                                            </div>
-                                        )
+                                        <img
+                                            src={getAvatarSrc(msg.user?.avatarUrl, msg.user?.name || msg.user?.title)}
+                                            className="w-9 h-9 rounded-full object-cover"
+                                            alt=""
+                                        />
                                     ) : (
-                                        <div className="w-9 h-9 rounded-full bg-border flex items-center justify-center text-xs font-bold text-text-muted">
-                                            {activeConversation?.visitor.name?.[0] || 'V'}
-                                        </div>
+                                        <img
+                                            src={getDiceBearUrl(activeConversation?.visitor.name || activeConversation?.visitor.email || activeConversation?.visitor.id)}
+                                            className="w-9 h-9 rounded-full"
+                                            alt=""
+                                        />
                                     )}
                                 </div>
 
@@ -412,9 +411,11 @@ export default function ChatWindow() {
                 {activeConversationId && typingStatus[activeConversationId]?.isTyping && (
                     <div className="flex flex-col gap-2 mt-4 animate-fade-in">
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-surface-tertiary flex items-center justify-center text-xs font-bold">
-                                {activeConversation?.visitor?.name?.[0] || 'V'}
-                            </div>
+                            <img
+                                src={getDiceBearUrl(activeConversation?.visitor?.name || activeConversation?.visitor?.email || activeConversation?.visitor?.id)}
+                                className="w-8 h-8 rounded-full"
+                                alt=""
+                            />
                             <span className="text-[13px] font-semibold text-text-primary">
                                 {activeConversation?.visitor?.name || 'Посетитель'}
                             </span>

@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
 import { useThemeStore } from '../store/themeStore';
 import { useNavigate } from 'react-router-dom';
+import { getAvatarSrc } from '../utils/avatarUtils';
 
 interface SidebarProps {
     activeView: 'chat' | 'settings' | 'dialogs' | 'channels' | 'search' | 'analytics' | 'live-visitors';
@@ -44,13 +45,11 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
             >
                 <div className="flex items-center gap-3">
                     <div className="relative shrink-0">
-                        {user?.avatarUrl ? (
-                            <img src={user.avatarUrl} alt="Avatar" className="w-9 h-9 rounded-full object-cover" />
-                        ) : (
-                            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-white">
-                                {user?.name?.[0] || 'U'}
-                            </div>
-                        )}
+                        <img
+                            src={getAvatarSrc(user?.avatarUrl, user?.name || user?.email)}
+                            alt="Avatar"
+                            className="w-9 h-9 rounded-full object-cover"
+                        />
                         <div
                             className="absolute top-0 -left-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface"
                             style={{
@@ -134,13 +133,11 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                         </div>
                         <div className="flex items-center gap-3 pl-8 text-[13px] text-text-secondary">
                             <div className="shrink-0 relative">
-                                {user?.avatarUrl ? (
-                                    <img src={user.avatarUrl} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
-                                ) : (
-                                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-white">
-                                        {user?.name?.[0] || 'U'}
-                                    </div>
-                                )}
+                            <img
+                                src={getAvatarSrc(user?.avatarUrl, user?.name || user?.email)}
+                                alt="Avatar"
+                                className="w-8 h-8 rounded-full object-cover"
+                            />
                             </div>
                             <div className="min-w-0">
                                 <div className="font-medium text-text-primary truncate max-w-[150px]">{user?.name}</div>
