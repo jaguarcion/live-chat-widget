@@ -124,13 +124,6 @@ export default function ChatWindow() {
         }, 0);
     };
 
-    const insertScreenShare = () => {
-        const jitsiLink = `https://meet.jit.si/${activeConversationId}-${Date.now()}`;
-        const newText = text + (text ? '\n' : '') + `Давайте поговорим на видео: ${jitsiLink}`;
-        setText(newText);
-        textareaRef.current?.focus();
-    };
-
     const handlePin = async () => {
         if (!activeConversationId) return;
         try {
@@ -195,6 +188,12 @@ export default function ChatWindow() {
 
     const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newText = e.target.value;
+        // Slash at start of empty input → open quick replies
+        if (newText === '/') {
+            setText('');
+            setShowQuickReplies(true);
+            return;
+        }
         setText(newText);
         extractMentions(newText);
         
@@ -326,11 +325,10 @@ export default function ChatWindow() {
                                         </span>
                                         {msg.isNote && (
                                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold flex items-center gap-1">
-                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" opacity="0.3"/>
-                                                    <path d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                                 </svg>
-                                                Заметка
+                                                Только операторы
                                             </span>
                                         )}
                                     </div>
@@ -448,85 +446,81 @@ export default function ChatWindow() {
                     </div>
                 )}
 
-                {/* Note Mode Indicator */}
-                {noteMode && (
-                    <div className="mb-2 px-3 py-2 rounded-lg bg-amber-100 text-amber-700 text-sm flex items-center gap-2 font-medium">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" opacity="0.3"/>
-                            <path d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-                        </svg>
-                        Режим заметок (видно только операторам)
-                    </div>
-                )}
-
-                <div className="flex items-end gap-2 px-1">
-                    <button
-                        onClick={() => setShowQuickReplies(!showQuickReplies)}
-                        disabled={!canSendMessage}
-                        className="w-10 h-10 rounded-lg bg-surface text-text-muted hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all flex-shrink-0 border border-border cursor-pointer shadow-sm"
-                        title="Быстрые ответы (/)"
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                    </button>
-
+                <div className="flex items-end gap-2">
+                    {/* Attach file */}
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={!canSendMessage}
-                        className="w-10 h-10 rounded-lg bg-surface text-text-muted hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all flex-shrink-0 border border-border cursor-pointer shadow-sm"
+                        className="w-9 h-9 rounded-lg bg-surface text-text-muted hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all flex-shrink-0 border border-border cursor-pointer"
                         title="Прикрепить файл"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                         </svg>
                     </button>
 
-                    <button
-                        onClick={() => setNoteMode(!noteMode)}
-                        disabled={!canSendMessage}
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all flex-shrink-0 border cursor-pointer shadow-sm ${
-                            noteMode
-                                ? 'bg-amber-100 text-amber-700 border-amber-300'
-                                : 'bg-surface text-text-muted hover:text-amber-600 hover:bg-amber-50 border-border'
-                        }`}
-                        title="Заметка (видна только операторам)"
-                    >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" opacity="0.3"/>
-                            <path d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-                        </svg>
-                    </button>
+                    {/* Textarea wrapper with lock icon inside */}
+                    <div className={`flex-1 flex items-end rounded-lg border transition-all shadow-sm overflow-hidden ${
+                        noteMode
+                            ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200'
+                            : 'border-border bg-surface focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary'
+                    }`}>
+                        <textarea
+                            ref={textareaRef}
+                            value={text}
+                            onChange={handleTextChange}
+                            onKeyDown={handleKeyDown}
+                            placeholder={
+                                !canSendMessage
+                                    ? 'Закрытый чат. Отправка отключена'
+                                    : noteMode
+                                    ? 'Внутренняя заметка (видна только операторам)...'
+                                    : 'Сообщение... или / для быстрых ответов, @ для упоминания'
+                            }
+                            rows={1}
+                            disabled={!canSendMessage}
+                            className={`flex-1 px-3 py-2.5 bg-transparent text-text-primary placeholder-text-muted resize-none focus:outline-none text-sm min-h-[42px] ${
+                                noteMode ? 'placeholder-amber-400' : ''
+                            }`}
+                            style={{ maxHeight: 120 }}
+                        />
+                        {/* Lock icon toggle */}
+                        <button
+                            onClick={() => canSendMessage && setNoteMode(!noteMode)}
+                            disabled={!canSendMessage}
+                            title={noteMode ? 'Заметка: видна только операторам. Нажмите, чтобы отправлять клиенту' : 'Обычное сообщение. Нажмите, чтобы переключить в режим заметки'}
+                            className={`self-end mb-1.5 mr-1.5 w-7 h-7 flex items-center justify-center rounded-md transition-all flex-shrink-0 cursor-pointer border-none ${
+                                noteMode
+                                    ? 'text-amber-600 bg-amber-100 hover:bg-amber-200'
+                                    : 'text-text-muted hover:text-primary hover:bg-primary/5 bg-transparent'
+                            }`}
+                        >
+                            {noteMode ? (
+                                /* Lock closed */
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                            ) : (
+                                /* Lock open */
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                                </svg>
+                            )}
+                        </button>
+                    </div>
 
-                    <button
-                        onClick={insertScreenShare}
-                        disabled={!canSendMessage}
-                        className="w-10 h-10 rounded-lg bg-surface text-text-muted hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all flex-shrink-0 border border-border cursor-pointer shadow-sm"
-                        title="Видео звонок (Jitsi Meet)"
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                    </button>
-
-                    <textarea
-                        ref={textareaRef}
-                        value={text}
-                        onChange={handleTextChange}
-                        onKeyDown={handleKeyDown}
-                        placeholder={canSendMessage ? (noteMode ? 'Внутренняя заметка...' : 'Введите сообщение или введите @ для упоминания...') : 'Закрытый чат. Отправка отключена'}
-                        rows={1}
-                        disabled={!canSendMessage}
-                        className="flex-1 px-4 py-2.5 rounded-lg bg-surface border border-border text-text-primary placeholder-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm min-h-[42px] shadow-sm"
-                    />
-
+                    {/* Send */}
                     <button
                         onClick={handleSend}
                         disabled={!text.trim() || sending || !canSendMessage}
-                        className="w-10 h-10 rounded-lg bg-primary hover:bg-primary-hover text-white flex items-center justify-center transition-all disabled:opacity-40 flex-shrink-0 border-none cursor-pointer shadow-md shadow-primary/20 "
-                        title={noteMode ? 'Отправить заметку (Ctrl+Enter)' : 'Отправить (Ctrl+Enter)'}
+                        className={`w-9 h-9 rounded-lg text-white flex items-center justify-center transition-all disabled:opacity-40 flex-shrink-0 border-none cursor-pointer ${
+                            noteMode
+                                ? 'bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-200'
+                                : 'bg-primary hover:bg-primary-hover shadow-md shadow-primary/20'
+                        }`}
+                        title={noteMode ? 'Сохранить заметку (Ctrl+Enter)' : 'Отправить (Ctrl+Enter)'}
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                         </svg>
                     </button>

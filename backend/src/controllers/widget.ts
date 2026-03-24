@@ -146,7 +146,8 @@ export const getHistory = async (req: Request, res: Response): Promise<void> => 
         }
 
         const messages = await prisma.message.findMany({
-            where: { conversationId },
+            // Internal operator notes must never be exposed to widget clients.
+            where: { conversationId, isNote: false as any },
             include: {
                 user: { select: { id: true, name: true, avatarUrl: true, title: true } }
             },
