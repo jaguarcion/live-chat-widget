@@ -60,7 +60,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                         />
                     </div>
                     <div className="hidden lg:flex flex-col min-w-0">
-                        <span className="font-semibold text-[14px] truncate">
+                        <span className="font-semibold text-[13px] truncate">
                             {status === 'online' ? 'Онлайн' : status === 'invisible' ? 'Невидимка' : 'Офлайн'}
                         </span>
                     </div>
@@ -94,7 +94,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
             {isUserMenuOpen && (
                 <div className="bg-surface-secondary border-b border-border/50 lg:relative absolute left-12 lg:left-auto top-0 lg:top-auto z-50 lg:z-auto w-56 lg:w-auto rounded-r-xl lg:rounded-none shadow-xl lg:shadow-none border lg:border-0 border-border overflow-hidden">
                     {/* Status Options */}
-                    <div className="px-5 py-4 space-y-4 text-[15px] font-medium border-b border-border/50">
+                    <div className="px-5 py-4 space-y-4 text-[13px] font-medium border-b border-border/50">
                         {status !== 'online' && (
                             <div
                                 className="flex items-center gap-3 cursor-pointer text-text-secondary hover:text-text-primary transition-colors"
@@ -163,7 +163,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
 
                     {/* Section: Диалоги */}
                     <div className="px-1.5 lg:px-3 py-2">
-                        <div className="hidden lg:block text-[10px] font-bold text-text-muted mb-2 uppercase tracking-wider px-2">Диалоги</div>
+                        <div className="hidden lg:block text-[10px] font-semibold text-text-muted mb-1.5 uppercase tracking-[0.1em] px-2">Диалоги</div>
                         <div className="space-y-0.5">
                             <button
                                 onClick={() => onViewChange('search')}
@@ -175,7 +175,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                                 <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
-                                <span className="hidden lg:block text-[14px] font-semibold">Поиск</span>
+                                <span className="hidden lg:block text-[13px] font-semibold">Поиск</span>
                             </button>
                             <button
                                 onClick={() => onViewChange('chat')}
@@ -188,7 +188,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                                     <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                     </svg>
-                                    <span className="hidden lg:block text-[14px] font-semibold">Чат</span>
+                                    <span className="hidden lg:block text-[13px] font-semibold">Чат</span>
                                 </div>
                                 {totalUnread > 0 && (
                                     <div className="hidden lg:flex px-1.5 py-0.5 rounded-full bg-danger text-white text-[10px] font-bold">
@@ -206,7 +206,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
 
                     {/* Section: Аналитика */}
                     <div className="px-1.5 lg:px-3 py-2 border-t border-border/30">
-                        <div className="hidden lg:block text-[10px] font-bold text-text-muted mb-2 uppercase tracking-wider px-2">Аналитика</div>
+                        <div className="hidden lg:block text-[10px] font-semibold text-text-muted mb-1.5 uppercase tracking-[0.1em] px-2">Аналитика</div>
                         <div className="space-y-0.5">
                             <button
                                 onClick={() => onViewChange('analytics')}
@@ -218,7 +218,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                                 <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                 </svg>
-                                <span className="hidden lg:block text-[14px] font-semibold">Аналитика</span>
+                                <span className="hidden lg:block text-[13px] font-semibold">Аналитика</span>
                             </button>
                             <button
                                 onClick={() => onViewChange('live-visitors')}
@@ -230,14 +230,14 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                                 <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                                 </svg>
-                                <span className="hidden lg:block text-[14px] font-semibold">Посетители</span>
+                                <span className="hidden lg:block text-[13px] font-semibold">Посетители</span>
                             </button>
                         </div>
                     </div>
 
                     {/* Section: Настройки */}
                     <div className="px-1.5 lg:px-3 py-2 border-t border-border/30">
-                        <div className="hidden lg:block text-[10px] font-bold text-text-muted mb-2 uppercase tracking-wider px-2">Настройки</div>
+                        <div className="hidden lg:block text-[10px] font-semibold text-text-muted mb-1.5 uppercase tracking-[0.1em] px-2">Настройки</div>
                         <div className="space-y-0.5">
                             <button
                                 onClick={() => onViewChange('settings')}
@@ -250,7 +250,7 @@ export default function Sidebar({ activeView, onViewChange }: SidebarProps) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
-                                <span className="hidden lg:block text-[14px] font-semibold">Настройки</span>
+                                <span className="hidden lg:block text-[13px] font-semibold">Настройки</span>
                             </button>
                         </div>
                     </div>

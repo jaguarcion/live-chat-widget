@@ -19,14 +19,14 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
     return (
         <button
             onClick={() => setActiveConversation(conversation.id)}
-            className={`w-full text-left p-4 border-b border-border transition-all cursor-pointer border-x-0 border-t-0 hover:bg-surface-secondary ${isActive
-                ? 'bg-primary/5 !border-l-4 !border-l-primary'
+            className={`w-full text-left px-3 py-3 border-b border-border transition-all cursor-pointer border-x-0 border-t-0 hover:bg-surface-secondary ${isActive
+                ? 'bg-primary/5 !border-l-[3px] !border-l-primary'
                 : 'bg-transparent'
                 }`}
         >
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-2.5">
                 {/* Avatar */}
-                <div className="w-9 h-9 rounded-full bg-surface-tertiary flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-full bg-surface-tertiary flex items-center justify-center flex-shrink-0 mt-0.5">
                     <svg className="w-4 h-4 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
@@ -34,20 +34,20 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-sm font-medium text-text-primary truncate flex items-center gap-1.5">
+                        <span className="text-[13px] font-semibold text-text-primary truncate flex items-center gap-1.5 leading-[1.3]">
                             {conversation.visitor.name || conversation.visitor.email || `Посетитель`}
                             {isOnline && (
-                                <span className="relative flex h-2 w-2 flex-shrink-0">
+                                <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
                                 </span>
                             )}
                         </span>
-                        <span className="text-xs text-text-muted flex-shrink-0 ml-2">
+                        <span className="text-[11px] font-normal text-text-muted flex-shrink-0 ml-2 leading-[1.3]">
                             {timeAgo(conversation.updatedAt)}
                         </span>
                     </div>
-                    <p className="text-xs text-text-secondary truncate">
+                    <p className="text-[12px] font-normal text-text-muted truncate leading-[1.4] mt-0.5">
                         {isTyping ? (
                             <span className="flex items-center gap-1">
                                 <span>печатает</span>
@@ -63,11 +63,11 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
                     </p>
                     <div className="flex items-center gap-2 mt-1">
                         {!!conversation.unreadCount && conversation.unreadCount > 0 && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-danger text-white font-semibold">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-danger text-white font-semibold leading-none">
                                 {conversation.unreadCount}
                             </span>
                         )}
-                        <span className="text-[10px] text-text-muted truncate">
+                        <span className="text-[11px] font-normal text-text-muted truncate leading-none">
                             {conversation.status === 'OPEN' ? (
                                 <span className="text-success">Открыт</span>
                             ) : (
@@ -126,33 +126,33 @@ export default function ConversationList() {
     return (
         <div className="flex-1 min-h-0 flex flex-col bg-surface">
             {/* Filter Bar */}
-            <div className="px-4 py-3 border-b border-border bg-surface-secondary flex items-center gap-2 flex-shrink-0">
+            <div className="px-3 py-2.5 border-b border-border bg-surface-secondary flex items-center gap-1.5 flex-shrink-0">
                 <button
                     onClick={() => setStatusFilter('ALL')}
-                    className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${
+                    className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'ALL'
                             ? 'bg-primary text-white'
-                            : 'bg-surface text-text-secondary hover:bg-surface-tertiary'
+                            : 'text-text-secondary hover:bg-surface-tertiary'
                     }`}
                 >
                     Все
                 </button>
                 <button
                     onClick={() => setStatusFilter('OPEN')}
-                    className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${
+                    className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'OPEN'
                             ? 'bg-success text-white'
-                            : 'bg-surface text-text-secondary hover:bg-surface-tertiary'
+                            : 'text-text-secondary hover:bg-surface-tertiary'
                     }`}
                 >
                     Открыты
                 </button>
                 <button
                     onClick={() => setStatusFilter('CLOSED')}
-                    className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${
+                    className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'CLOSED'
                             ? 'bg-danger text-white'
-                            : 'bg-surface text-text-secondary hover:bg-surface-tertiary'
+                            : 'text-text-secondary hover:bg-surface-tertiary'
                     }`}
                 >
                     Закрыты

@@ -210,8 +210,8 @@ export default function ChatWindow() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-text-primary mb-1">Выберите диалог</h3>
-                <p className="text-sm text-text-muted">Выберите диалог из списка слева для начала общения</p>
+                <h3 className="text-[15px] font-semibold text-text-primary mb-1">Выберите диалог</h3>
+                <p className="text-[13px] font-normal text-text-muted">Выберите диалог из списка слева для начала общения</p>
             </div>
         );
     }
@@ -236,13 +236,13 @@ export default function ChatWindow() {
                     </svg>
                 </div>
                 <div>
-                    <h3 className="text-sm font-semibold text-text-primary">
+                    <h3 className="text-[13px] font-semibold text-text-primary leading-[1.3]">
                         {activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель'}
                     </h3>
-                    <p className="text-xs text-text-muted mt-0.5">{activeConversation?.project.name}</p>
+                    <p className="text-[11px] font-normal text-text-muted mt-0.5 leading-none">{activeConversation?.project.name}</p>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${activeConversation?.status === 'OPEN'
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${activeConversation?.status === 'OPEN'
                         ? 'bg-success/15 text-success'
                         : 'bg-text-muted/15 text-text-muted'
                         }`}>
@@ -272,14 +272,14 @@ export default function ChatWindow() {
                                     <div className="relative my-4">
                                         <div className="h-px bg-border" />
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <span className="px-3 text-sm font-semibold text-text-primary bg-surface leading-none">
+                                            <span className="px-3 text-[11px] font-semibold text-text-muted bg-surface leading-none uppercase tracking-[0.08em]">
                                                 {formatMsgDate(msg.createdAt)}
                                             </span>
                                         </div>
                                     </div>
                                 )}
                                 <div className="flex justify-center my-2">
-                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-600 text-xs max-w-[90%]">
+                                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-blue-50 border border-blue-100 text-blue-600 text-[11px] font-normal max-w-[90%]">
                                         <svg className="w-3.5 h-3.5 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
@@ -298,7 +298,7 @@ export default function ChatWindow() {
                                     <div className="relative my-4">
                                         <div className="h-px bg-border" />
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <span className="px-3 text-sm font-semibold text-text-primary bg-surface leading-none">
+                                            <span className="px-3 text-[11px] font-semibold text-text-muted bg-surface leading-none uppercase tracking-[0.08em]">
                                                 {formatMsgDate(msg.createdAt)}
                                             </span>
                                         </div>
@@ -317,10 +317,10 @@ export default function ChatWindow() {
                                     </div>
                                     <div className="min-w-0">
                                         <div className="flex items-baseline gap-2 flex-wrap">
-                                            <span className="text-sm font-semibold text-text-primary leading-none">{msg.user?.name || 'Оператор'}</span>
-                                            <span className="text-xs text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
+                                            <span className="text-[13px] font-semibold text-text-primary leading-none">{msg.user?.name || 'Оператор'}</span>
+                                            <span className="text-[11px] font-normal text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
                                         </div>
-                                        <div className="text-xs italic text-text-muted mt-0.5 leading-none">теперь в чате</div>
+                                        <div className="text-[12px] font-normal italic text-text-muted mt-0.5 leading-none">теперь в чате</div>
                                     </div>
                                 </div>
                             </div>
@@ -333,7 +333,7 @@ export default function ChatWindow() {
                                 <div className="relative my-4">
                                     <div className="h-px bg-border" />
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <span className="px-3 text-sm font-semibold text-text-primary bg-surface leading-none">
+                                        <span className="px-3 text-[11px] font-semibold text-text-muted bg-surface leading-none uppercase tracking-[0.08em]">
                                             {formatMsgDate(msg.createdAt)}
                                         </span>
                                     </div>
@@ -360,20 +360,20 @@ export default function ChatWindow() {
 
                                 <div className="min-w-0 max-w-full">
                                     <div className="flex items-baseline gap-2 flex-wrap">
-                                        <span className="text-sm font-semibold text-text-primary leading-none">
+                                        <span className="text-[13px] font-semibold text-text-primary leading-none">
                                             {msg.sender === 'OPERATOR'
                                                 ? (msg.user?.name || 'Оператор')
                                                 : (activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель')}
                                         </span>
-                                        <span className="text-xs text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
+                                        <span className="text-[11px] font-normal text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
                                         {msg.isAutomatic && (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold leading-none flex-shrink-0">
                                                 авто
                                             </span>
                                         )}
                                         {msg.isNote && (
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold flex items-center gap-1 leading-none">
-                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1 leading-none">
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                                 </svg>
                                                 только операторы
@@ -401,7 +401,7 @@ export default function ChatWindow() {
                                         </a>
                                     )}
 
-                                    {msg.text && <p className="break-words text-sm leading-normal whitespace-pre-wrap text-text-primary">{msg.text}</p>}
+                                    {msg.text && <p className="break-words text-[13px] font-normal leading-[1.5] whitespace-pre-wrap text-text-primary">{msg.text}</p>}
                                     </div>
                                 </div>
                             </div>
@@ -415,10 +415,10 @@ export default function ChatWindow() {
                             <div className="w-8 h-8 rounded-full bg-surface-tertiary flex items-center justify-center text-xs font-bold">
                                 {activeConversation?.visitor?.name?.[0] || 'V'}
                             </div>
-                            <span className="text-sm font-semibold text-text-primary">
+                            <span className="text-[13px] font-semibold text-text-primary">
                                 {activeConversation?.visitor?.name || 'Посетитель'}
                             </span>
-                            <span className="text-xs text-text-muted italic">печатает...</span>
+                            <span className="text-[11px] font-normal text-text-muted italic">печатает...</span>
                         </div>
                         <div className="ml-10 text-sm text-text-muted opacity-70 break-words max-w-[80%] line-clamp-3">
                             {typingStatus[activeConversationId]?.text || '...'}
@@ -506,7 +506,7 @@ export default function ChatWindow() {
                             }
                             rows={1}
                             disabled={!canSendMessage}
-                            className={`flex-1 px-3 py-2.5 bg-transparent text-text-primary placeholder-text-muted resize-none focus:outline-none text-sm min-h-[42px] ${
+                            className={`flex-1 px-3 py-2.5 bg-transparent text-text-primary placeholder-text-muted resize-none focus:outline-none text-[13px] leading-[1.5] min-h-[40px] ${
                                 noteMode ? 'placeholder-amber-400' : ''
                             }`}
                             style={{ maxHeight: 120 }}
