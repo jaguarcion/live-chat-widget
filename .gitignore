@@ -37,6 +37,13 @@ backend/dist/
 dashboard/dist/
 widget/dist/
 
+# Prisma generated client
+backend/src/generated/
+
+# Debug / temp scripts
+backend/tmp/
+backend/check_db.js
+
 # Database
 backend/prisma/*.db
 backend/prisma/*.db-journal
