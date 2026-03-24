@@ -1400,15 +1400,18 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                                                     onChange={async (e) => {
                                                         const file = e.target.files?.[0];
                                                         if (!file) return;
+                                                        // Reset so the same file can be re-selected later
+                                                        if (fileInputRef.current) fileInputRef.current.value = '';
                                                         try {
                                                             const { data } = await uploadFile(file);
                                                             const newAvatarUrl = data.url;
                                                             await updateProjectMember(selectedProjectId, editingMember.userId, { avatarUrl: newAvatarUrl });
                                                             setEditingMember({ ...editingMember, user: { ...editingMember.user, avatarUrl: newAvatarUrl } });
                                                             loadMembers(selectedProjectId);
-                                                        } catch (err) {
+                                                        } catch (err: any) {
                                                             console.error('Failed to upload avatar', err);
-                                                            alert('Не удалось загрузить фото');
+                                                            const msg = err?.response?.data?.error || 'Не удалось загрузить фото';
+                                                            alert(msg);
                                                         }
                                                     }}
                                                 />

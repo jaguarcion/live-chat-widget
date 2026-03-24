@@ -11,10 +11,12 @@ import { logEvent } from '../services/eventLogger';
 const ALLOWED_MIME_TYPES = new Set([
     'image/jpeg',
     'image/png',
+    'image/webp',
+    'image/gif',
     'application/pdf'
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.pdf']);
+const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf']);
 
 type UploadQuotaBucket = {
     entries: Array<{ timestamp: number; size: number }>;
@@ -99,6 +101,24 @@ const detectMagicMime = (bytes: Buffer): string | null => {
         bytes[4] === 0x2d
     ) {
         return 'application/pdf';
+    }
+
+    // WebP: RIFF????WEBP
+    if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    ) {
+        return 'image/webp';
+    }
+
+    // GIF87a / GIF89a
+    if (
+        bytes.length >= 6 &&
+        bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 &&
+        bytes[3] === 0x38 && (bytes[4] === 0x37 || bytes[4] === 0x39) && bytes[5] === 0x61
+    ) {
+        return 'image/gif';
     }
 
     return null;
