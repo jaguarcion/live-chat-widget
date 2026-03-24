@@ -382,7 +382,7 @@ export default function ChatWindow() {
 
                                 <div className="min-w-0 max-w-full">
                                     <div className="flex items-baseline gap-2 flex-wrap">
-                                        <span className="text-[13px] font-semibold text-text-primary leading-none">
+                                        <span className="text-base font-semibold text-text-primary leading-none">
                                             {msg.sender === 'OPERATOR'
                                                 ? (msg.user?.name || 'Оператор')
                                                 : (activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель')}
@@ -423,7 +423,7 @@ export default function ChatWindow() {
                                         </a>
                                     )}
 
-                                    {msg.text && <p className="break-words text-[13px] font-normal leading-[1.5] whitespace-pre-wrap text-text-primary">{msg.text}</p>}
+                                    {msg.text && <p className="break-words text-base font-normal leading-[1.5] whitespace-pre-wrap text-text-primary">{msg.text}</p>}
                                     </div>
                                 </div>
                             </div>
