@@ -6,6 +6,7 @@ import { getAvatarSrc, getDiceBearUrl } from '../utils/avatarUtils';
 import QuickRepliesPanel from './QuickRepliesPanel';
 
 export default function ChatWindow() {
+    const MAX_TEXTAREA_ROWS = 5;
     const { activeConversationId, messages, conversations, addMessage, typingStatus, sendTyping, addNote } = useChatStore();
     const [text, setText] = useState('');
     const [noteMode, setNoteMode] = useState(false);
@@ -22,6 +23,7 @@ export default function ChatWindow() {
 
     const activeConversation = conversations.find(c => c.id === activeConversationId);
     const canSendMessage = !!activeConversationId && activeConversation?.status === 'OPEN';
+    const hasText = text.trim().length > 0;
 
     const formatMsgTime = (value: string | Date) =>
         new Date(value).toLocaleTimeString('ru-RU', { hour: 'numeric', minute: '2-digit' });
@@ -55,6 +57,27 @@ export default function ChatWindow() {
         // Smooth scroll for new messages (incoming or outgoing)
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    useEffect(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        textarea.style.height = 'auto';
+
+        const computedStyle = window.getComputedStyle(textarea);
+        const lineHeight = parseFloat(computedStyle.lineHeight) || 20;
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+        const borderTop = parseFloat(computedStyle.borderTopWidth) || 0;
+        const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0;
+
+        const maxHeight =
+            lineHeight * MAX_TEXTAREA_ROWS + paddingTop + paddingBottom + borderTop + borderBottom;
+        const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+        textarea.style.height = `${nextHeight}px`;
+        textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }, [text]);
 
     const handleSend = async () => {
         if (!text.trim() || !activeConversationId || !canSendMessage) return;
@@ -147,8 +170,8 @@ export default function ChatWindow() {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        // Ctrl/Cmd + Enter to send
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        // Enter sends message, Shift+Enter adds newline
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
             return;
@@ -165,9 +188,9 @@ export default function ChatWindow() {
             return;
         }
         
-        // Regular Enter (without Ctrl) doesn't send, just adds newline
-        if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
-            return; // Default behavior: add newline
+        // Shift+Enter keeps default behavior (newline)
+        if (e.key === 'Enter' && e.shiftKey) {
+            return;
         }
         
         if (e.key === '/' && text === '') {
@@ -371,7 +394,7 @@ export default function ChatWindow() {
                                             </span>
                                         )}
                                         {msg.isNote && (
-                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1 leading-none">
+                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-400 flex items-center gap-1 leading-none">
                                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                                 </svg>
@@ -380,7 +403,7 @@ export default function ChatWindow() {
                                         )}
                                     </div>
 
-                                    <div className={`${msg.isNote ? 'mt-1 p-3 rounded-lg bg-amber-50 border border-amber-200' : 'mt-0.5'}`}>
+                                    <div className={`${msg.isNote ? 'mt-1 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-700/60' : 'mt-0.5'}`}>
 
                                     {msg.type === 'IMAGE' && msg.attachmentUrl && (
                                         <img
@@ -474,23 +497,11 @@ export default function ChatWindow() {
                     </div>
                 )}
 
-                <div className="flex items-end gap-2">
-                    {/* Attach file */}
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={!canSendMessage}
-                        className="w-9 h-9 rounded-lg bg-surface text-text-muted hover:text-primary hover:bg-primary/5 flex items-center justify-center transition-all flex-shrink-0 border border-border cursor-pointer"
-                        title="Прикрепить файл"
-                    >
-                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                    </button>
-
-                    {/* Textarea wrapper with lock icon inside */}
+                <div className="flex items-end">
+                    {/* Textarea wrapper with right controls */}
                     <div className={`flex-1 flex items-end rounded-lg border transition-all shadow-sm overflow-hidden ${
                         noteMode
-                            ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200'
+                            ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/50 ring-2 ring-amber-200 dark:ring-amber-700/50'
                             : 'border-border bg-surface focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary'
                     }`}>
                         <textarea
@@ -510,48 +521,64 @@ export default function ChatWindow() {
                             className={`flex-1 px-3 py-2.5 bg-transparent text-text-primary placeholder-text-muted resize-none focus:outline-none text-[13px] leading-[1.5] min-h-[40px] ${
                                 noteMode ? 'placeholder-amber-400' : ''
                             }`}
-                            style={{ maxHeight: 120 }}
+                            style={{ overflowY: 'hidden' }}
                         />
-                        {/* Lock icon toggle */}
-                        <button
-                            onClick={() => canSendMessage && setNoteMode(!noteMode)}
-                            disabled={!canSendMessage}
-                            title={noteMode ? 'Заметка: видна только операторам. Нажмите, чтобы отправлять клиенту' : 'Обычное сообщение. Нажмите, чтобы переключить в режим заметки'}
-                            className={`self-end mb-1.5 mr-1.5 w-7 h-7 flex items-center justify-center rounded-md transition-all flex-shrink-0 cursor-pointer border-none ${
-                                noteMode
-                                    ? 'text-amber-600 bg-amber-100 hover:bg-amber-200'
-                                    : 'text-text-muted hover:text-primary hover:bg-primary/5 bg-transparent'
-                            }`}
-                        >
-                            {noteMode ? (
-                                /* Lock closed */
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                </svg>
-                            ) : (
-                                /* Lock open */
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                                </svg>
-                            )}
-                        </button>
-                    </div>
+                        <div className="self-end mb-1.5 mr-1.5 flex items-center gap-1.5">
+                            {/* Lock icon toggle */}
+                            <button
+                                onClick={() => canSendMessage && setNoteMode(!noteMode)}
+                                disabled={!canSendMessage}
+                                title={noteMode ? 'Заметка: видна только операторам. Нажмите, чтобы отправлять клиенту' : 'Обычное сообщение. Нажмите, чтобы переключить в режим заметки'}
+                                className={`w-7 h-7 flex items-center justify-center rounded-md transition-all flex-shrink-0 cursor-pointer border-none ${
+                                    noteMode
+                                        ? 'text-amber-600 bg-amber-100 hover:bg-amber-200'
+                                        : 'text-text-muted hover:text-primary hover:bg-primary/5 bg-transparent'
+                                }`}
+                            >
+                                {noteMode ? (
+                                    /* Lock closed */
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                    </svg>
+                                ) : (
+                                    /* Lock open */
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                                    </svg>
+                                )}
+                            </button>
 
-                    {/* Send */}
-                    <button
-                        onClick={handleSend}
-                        disabled={!text.trim() || sending || !canSendMessage}
-                        className={`w-9 h-9 rounded-lg text-white flex items-center justify-center transition-all disabled:opacity-40 flex-shrink-0 border-none cursor-pointer ${
-                            noteMode
-                                ? 'bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-200'
-                                : 'bg-primary hover:bg-primary-hover shadow-md shadow-primary/20'
-                        }`}
-                        title={noteMode ? 'Сохранить заметку (Ctrl+Enter)' : 'Отправить (Ctrl+Enter)'}
-                    >
-                        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                    </button>
+                            {/* Attach or send action */}
+                            <button
+                                onClick={hasText ? handleSend : () => fileInputRef.current?.click()}
+                                disabled={!canSendMessage || (hasText && sending)}
+                                className={`w-8 h-8 rounded-md flex items-center justify-center transition-all disabled:opacity-40 flex-shrink-0 border-none cursor-pointer ${
+                                    hasText
+                                        ? noteMode
+                                            ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm shadow-amber-200 dark:shadow-amber-900/50'
+                                            : 'bg-primary text-white hover:bg-primary-hover shadow-sm shadow-primary/20'
+                                        : 'bg-transparent text-text-muted hover:text-primary hover:bg-primary/5'
+                                }`}
+                                title={
+                                    hasText
+                                        ? noteMode
+                                            ? 'Сохранить заметку (Enter)'
+                                            : 'Отправить (Enter)'
+                                        : 'Прикрепить файл'
+                                }
+                            >
+                                {hasText ? (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
