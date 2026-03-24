@@ -22,6 +22,12 @@ export default function ChatWindow() {
     const activeConversation = conversations.find(c => c.id === activeConversationId);
     const canSendMessage = !!activeConversationId && activeConversation?.status === 'OPEN';
 
+    const formatMsgTime = (value: string | Date) =>
+        new Date(value).toLocaleTimeString('ru-RU', { hour: 'numeric', minute: '2-digit' });
+
+    const formatMsgDate = (value: string | Date) =>
+        new Date(value).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+
     useEffect(() => {
         // Instant scroll when switching conversation
         messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
@@ -235,7 +241,7 @@ export default function ChatWindow() {
             )}
 
             {/* Header */}
-            <div className="px-6 py-4 border-b border-border bg-surface flex items-center gap-3 shadow-sm z-10">
+            <div className="px-4 md:px-6 py-3 border-b border-border bg-surface flex items-center gap-3 z-10">
                 <div className="w-10 h-10 rounded-full bg-surface-tertiary flex items-center justify-center border border-border">
                     <svg className="w-5 h-5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -267,80 +273,104 @@ export default function ChatWindow() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 bg-surface">
                 {messages.length === 0 && (
                     <div className="text-center text-text-muted text-sm py-8">Нет сообщений</div>
                 )}
-                {messages.map((msg) => {
+                {messages.map((msg, idx) => {
+                    const prev = idx > 0 ? messages[idx - 1] : null;
+                    const showDateSeparator =
+                        !prev ||
+                        new Date(prev.createdAt).toDateString() !== new Date(msg.createdAt).toDateString();
+
                     const isJoin = msg.type === 'OPERATOR_JOIN';
 
                     if (isJoin) {
                         return (
-                            <div key={msg.id} className="flex flex-col items-center justify-center py-6 animate-fade-in">
-                                <div className="relative mb-3">
-                                    {msg.user?.avatarUrl ? (
-                                        <img src={msg.user.avatarUrl} className="w-20 h-20 rounded-full object-cover shadow-lg border-2 border-white" alt="Avatar" />
-                                    ) : (
-                                        <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-2xl font-bold text-white shadow-lg border-2 border-white">
-                                            {msg.user?.name?.[0] || 'O'}
+                            <div key={msg.id}>
+                                {showDateSeparator && (
+                                    <div className="relative my-4">
+                                        <div className="h-px bg-border" />
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span className="px-3 text-sm font-semibold text-text-primary bg-surface leading-none">
+                                                {formatMsgDate(msg.createdAt)}
+                                            </span>
                                         </div>
-                                    )}
-                                </div>
-                                <div className="text-center">
-                                    <div className="text-sm font-bold text-text-primary">{msg.user?.name}</div>
-                                    {msg.user?.title && <div className="text-xs text-text-muted mt-0.5">{msg.user.title}</div>}
-                                    <div className="text-[11px] text-text-muted italic mt-1">теперь в чате</div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-3 py-2.5">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        {msg.user?.avatarUrl ? (
+                                            <img src={msg.user.avatarUrl} className="w-9 h-9 rounded-full object-cover" alt="Avatar" />
+                                        ) : (
+                                            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-white">
+                                                {msg.user?.name?.[0] || 'O'}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-baseline gap-2 flex-wrap">
+                                            <span className="text-[15px] font-semibold text-text-primary leading-none">{msg.user?.name || 'Оператор'}</span>
+                                            <span className="text-[13px] text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
+                                        </div>
+                                        <div className="text-[13px] italic text-text-muted mt-0.5 leading-none">теперь в чате</div>
+                                    </div>
                                 </div>
                             </div>
                         );
                     }
 
                     return (
-                        <div
-                            key={msg.id}
-                            className={`flex gap-3 ${msg.sender === 'OPERATOR' ? 'flex-row-reverse' : 'flex-row'}`}
-                        >
-                            {/* Avatar */}
-                            <div className="flex-shrink-0 mt-1">
-                                {msg.sender === 'OPERATOR' ? (
-                                    msg.user?.avatarUrl ? (
-                                        <img src={msg.user.avatarUrl} className="w-8 h-8 rounded-full object-cover" alt="" />
-                                    ) : (
-                                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-white">
-                                            {msg.user?.name?.[0] || 'O'}
-                                        </div>
-                                    )
-                                ) : (
-                                    <div className="w-8 h-8 rounded-full bg-border flex items-center justify-center text-[10px] font-bold text-text-muted">
-                                        {activeConversation?.visitor.name?.[0] || 'V'}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className={`flex flex-col max-w-[75%] ${msg.sender === 'OPERATOR' ? 'items-end' : 'items-start'}`}>
-                                {msg.sender === 'OPERATOR' && (
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-[11px] text-text-muted">
-                                            {msg.user?.name || 'Оператор'}
+                        <div key={msg.id}>
+                            {showDateSeparator && (
+                                <div className="relative my-4">
+                                    <div className="h-px bg-border" />
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <span className="px-3 text-sm font-semibold text-text-primary bg-surface leading-none">
+                                            {formatMsgDate(msg.createdAt)}
                                         </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 py-2">
+                                {/* Avatar */}
+                                <div className="flex-shrink-0 mt-0.5">
+                                    {msg.sender === 'OPERATOR' ? (
+                                        msg.user?.avatarUrl ? (
+                                            <img src={msg.user.avatarUrl} className="w-9 h-9 rounded-full object-cover" alt="" />
+                                        ) : (
+                                            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-[12px] font-bold text-white">
+                                                {msg.user?.name?.[0] || 'O'}
+                                            </div>
+                                        )
+                                    ) : (
+                                        <div className="w-9 h-9 rounded-full bg-border flex items-center justify-center text-[12px] font-bold text-text-muted">
+                                            {activeConversation?.visitor.name?.[0] || 'V'}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="min-w-0 max-w-full">
+                                    <div className="flex items-baseline gap-2 flex-wrap">
+                                        <span className="text-[15px] font-semibold text-text-primary leading-none">
+                                            {msg.sender === 'OPERATOR'
+                                                ? (msg.user?.name || 'Оператор')
+                                                : (activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель')}
+                                        </span>
+                                        <span className="text-[13px] text-text-muted leading-none">{formatMsgTime(msg.createdAt)}</span>
                                         {msg.isNote && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold flex items-center gap-1">
-                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold flex items-center gap-1 leading-none">
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                                 </svg>
-                                                Только операторы
+                                                только операторы
                                             </span>
                                         )}
                                     </div>
-                                )}
 
-                                <div className={`${
-                                    msg.isNote
-                                        ? 'bg-amber-100 text-amber-900 rounded-lg border border-amber-300'
-                                        : msg.sender === 'OPERATOR'
-                                        ? 'bg-primary text-white rounded-lg rounded-tr-none'
-                                        : 'bg-surface-tertiary text-text-primary rounded-lg rounded-tl-none border border-border'
-                                    } px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}>
+                                    <div className={`${msg.isNote ? 'mt-1 p-3 rounded-lg bg-amber-50 border border-amber-200' : 'mt-0.5'}`}>
 
                                     {msg.type === 'IMAGE' && msg.attachmentUrl && (
                                         <img
@@ -351,12 +381,7 @@ export default function ChatWindow() {
                                     )}
 
                                     {msg.type === 'FILE' && msg.attachmentUrl && (
-                                        <a
-                                            href={msg.attachmentUrl}
-                                            target="_blank"
-                                            className={`flex items-center gap-2 p-3 rounded-xl mb-2 no-underline ${msg.sender === 'OPERATOR' ? 'bg-white/10 text-white' : 'bg-surface-tertiary text-text-primary'
-                                                }`}
-                                        >
+                                        <a href={msg.attachmentUrl} target="_blank" className="flex items-center gap-2 p-3 rounded-xl mb-2 no-underline bg-surface-tertiary text-text-primary border border-border">
                                             <div className="w-8 h-8 rounded-lg bg-surface-primary/20 flex items-center justify-center">📄</div>
                                             <div className="overflow-hidden">
                                                 <div className="text-xs font-semibold truncate">Файл</div>
@@ -365,12 +390,8 @@ export default function ChatWindow() {
                                         </a>
                                     )}
 
-                                    {msg.text && <p className="break-words text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
-
-                                    <p className={`text-[10px] mt-1.5 ${msg.sender === 'OPERATOR' ? 'text-white/60 text-right' : 'text-text-muted'
-                                        }`}>
-                                        {new Date(msg.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
+                                    {msg.text && <p className="break-words text-[16px] leading-snug whitespace-pre-wrap text-text-primary">{msg.text}</p>}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -380,20 +401,15 @@ export default function ChatWindow() {
                 {activeConversationId && typingStatus[activeConversationId]?.isTyping && (
                     <div className="flex flex-col gap-2 mt-4 animate-fade-in">
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-surface-tertiary flex items-center justify-center text-xs font-bold ring-2 ring-surface-primary">
+                            <div className="w-8 h-8 rounded-full bg-surface-tertiary flex items-center justify-center text-xs font-bold">
                                 {activeConversation?.visitor?.name?.[0] || 'V'}
                             </div>
-                            <span className="text-xs font-semibold text-text-secondary">
+                            <span className="text-sm font-semibold text-text-primary">
                                 {activeConversation?.visitor?.name || 'Посетитель'}
                             </span>
-                            <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 text-[10px] font-bold flex items-center gap-1">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                                </svg>
-                                ещё не отправлено
-                            </span>
+                            <span className="text-[12px] text-text-muted italic">печатает...</span>
                         </div>
-                        <div className="ml-10 text-sm text-text-muted opacity-60 break-words max-w-[80%] line-clamp-3">
+                        <div className="ml-10 text-sm text-text-muted opacity-70 break-words max-w-[80%] line-clamp-3">
                             {typingStatus[activeConversationId]?.text || '...'}
                         </div>
                     </div>
