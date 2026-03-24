@@ -555,8 +555,8 @@ export default function ChatWindow() {
                                 className={`w-8 h-8 rounded-md flex items-center justify-center transition-all disabled:opacity-40 flex-shrink-0 border-none cursor-pointer ${
                                     hasText
                                         ? noteMode
-                                            ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm shadow-amber-200 dark:shadow-amber-900/50'
-                                            : 'bg-primary text-white hover:bg-primary-hover shadow-sm shadow-primary/20'
+                                            ? 'bg-transparent text-amber-600 hover:text-amber-700'
+                                            : 'bg-transparent text-primary hover:text-primary-hover'
                                         : 'bg-transparent text-text-muted hover:text-primary hover:bg-primary/5'
                                 }`}
                                 title={
