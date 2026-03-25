@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChatStore } from '../store/chatStore';
 import type { Conversation } from '../store/chatStore';
 import { getDiceBearUrl } from '../utils/avatarUtils';
-import { useAuthStore } from '../store/authStore';
 import { useProjectStore } from '../store/projectStore';
 
 const ITEM_HEIGHT = 92;
@@ -18,7 +17,7 @@ function timeAgo(dateStr: string): string {
     return `${Math.floor(hours / 24)}д`;
 }
 
-function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conversation: Conversation & { slaState?: 'OK' | 'WARNING' | 'OVERDUE'; ageMin?: number }; isActive: boolean; isOnline: boolean; isTyping: boolean }) {
+function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conversation: Conversation; isActive: boolean; isOnline: boolean; isTyping: boolean }) {
     const { setActiveConversation } = useChatStore();
     const lastMessage = conversation.messages[0];
 
@@ -68,11 +67,6 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
                         )}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
-                        {conversation.slaState && conversation.status === 'OPEN' && conversation.slaState !== 'OK' && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold leading-none ${conversation.slaState === 'OVERDUE' ? 'bg-danger text-white' : 'bg-amber-100 text-amber-700'}`}>
-                                {conversation.slaState === 'OVERDUE' ? 'SLA нарушен' : 'SLA риск'}
-                            </span>
-                        )}
                         {!!conversation.unreadCount && conversation.unreadCount > 0 && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-danger text-white font-semibold leading-none">
                                 {conversation.unreadCount}
@@ -107,42 +101,25 @@ export default function ConversationList({ conversations: inputConversations }: 
         fetchConversations,
         setConversationFilters,
     } = useChatStore();
-    const { user } = useAuthStore();
     const { selectedProjectId } = useProjectStore();
     const filterScope = selectedProjectId || 'all-projects';
     const statusStorageKey = `operator_status_filter_${filterScope}`;
-    const savedViewStorageKey = `operator_saved_view_${filterScope}`;
-    const searchStorageKey = `operator_search_query_${filterScope}`;
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>(() =>
         (localStorage.getItem(statusStorageKey) as 'ALL' | 'OPEN' | 'CLOSED') || 'ALL'
     );
-    const [savedView, setSavedView] = useState<'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK'>(() =>
-        (localStorage.getItem(savedViewStorageKey) as 'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK') || 'ALL'
-    );
-    const [searchQuery, setSearchQuery] = useState(() => localStorage.getItem(searchStorageKey) || '');
     const listRef = useRef<HTMLDivElement | null>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(620);
     const sourceConversations = inputConversations ?? conversations;
 
-    const persistFilters = (nextStatus: 'ALL' | 'OPEN' | 'CLOSED', nextView: 'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK') => {
+    const persistFilters = (nextStatus: 'ALL' | 'OPEN' | 'CLOSED') => {
         localStorage.setItem(statusStorageKey, nextStatus);
-        localStorage.setItem(savedViewStorageKey, nextView);
     };
 
     useEffect(() => {
-        localStorage.setItem(searchStorageKey, searchQuery);
-    }, [searchQuery, searchStorageKey]);
-
-    useEffect(() => {
         const nextStatus = (localStorage.getItem(statusStorageKey) as 'ALL' | 'OPEN' | 'CLOSED') || 'ALL';
-        const nextView = (localStorage.getItem(savedViewStorageKey) as 'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK') || 'ALL';
-        const nextQuery = localStorage.getItem(searchStorageKey) || '';
-
         setStatusFilter(nextStatus);
-        setSavedView(nextView);
-        setSearchQuery(nextQuery);
-    }, [statusStorageKey, savedViewStorageKey, searchStorageKey]);
+    }, [statusStorageKey]);
 
     useEffect(() => {
         if (!listRef.current) return;
@@ -150,28 +127,27 @@ export default function ConversationList({ conversations: inputConversations }: 
     }, []);
 
     useEffect(() => {
-        const operator = savedView === 'MINE' ? 'me' : savedView === 'UNASSIGNED' ? 'unassigned' : 'all';
         setConversationFilters({
-            query: searchQuery,
+            query: '',
             status: statusFilter,
-            operator,
+            operator: 'all',
         });
 
         const timer = setTimeout(() => {
             fetchConversations({
                 reset: true,
                 projectId: selectedProjectId || undefined,
-                query: searchQuery,
+                query: '',
                 status: statusFilter,
-                operator,
+                operator: 'all',
             });
         }, 250);
 
         return () => clearTimeout(timer);
-    }, [searchQuery, statusFilter, savedView, selectedProjectId]);
+    }, [statusFilter, selectedProjectId]);
 
     const visibleConversations = useMemo(() => {
-        let filtered = [...(sourceConversations as Array<Conversation & { slaState?: 'OK' | 'WARNING' | 'OVERDUE' }>)];
+        let filtered = [...sourceConversations];
 
         // Apply status filter
         if (statusFilter === 'OPEN') {
@@ -180,24 +156,13 @@ export default function ConversationList({ conversations: inputConversations }: 
             filtered = filtered.filter(c => c.status === 'CLOSED');
         }
 
-        if (savedView === 'MINE') {
-            filtered = filtered.filter(c => c.operatorId === user?.id);
-        } else if (savedView === 'UNASSIGNED') {
-            filtered = filtered.filter(c => !c.operatorId);
-        } else if (savedView === 'SLA_RISK') {
-            filtered = filtered.filter(c => c.status === 'OPEN' && c.slaState && c.slaState !== 'OK');
-        }
-
         // Sort by most recently updated
         filtered.sort((a, b) => {
-            const slaWeight = (value?: string) => value === 'OVERDUE' ? 2 : value === 'WARNING' ? 1 : 0;
-            const slaDiff = slaWeight((b as any).slaState) - slaWeight((a as any).slaState);
-            if (slaDiff !== 0) return slaDiff;
             return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         });
 
         return filtered;
-    }, [sourceConversations, statusFilter, savedView, user?.id]);
+    }, [sourceConversations, statusFilter]);
 
     const startIndex = Math.max(Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN, 0);
     const endIndex = Math.min(
@@ -232,14 +197,8 @@ export default function ConversationList({ conversations: inputConversations }: 
         <div className="flex-1 min-h-0 flex flex-col bg-surface">
             {/* Filter Bar */}
             <div className="px-3 py-2.5 border-b border-border bg-surface-secondary flex items-center gap-1.5 flex-shrink-0">
-                <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Поиск по имени/email"
-                    className="flex-1 min-w-[140px] text-[12px] px-2.5 py-1 rounded-md bg-surface border border-border text-text-secondary"
-                />
                 <button
-                    onClick={() => { setStatusFilter('ALL'); persistFilters('ALL', savedView); }}
+                    onClick={() => { setStatusFilter('ALL'); persistFilters('ALL'); }}
                     className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'ALL'
                             ? 'bg-primary text-white'
@@ -249,7 +208,7 @@ export default function ConversationList({ conversations: inputConversations }: 
                     Все
                 </button>
                 <button
-                    onClick={() => { setStatusFilter('OPEN'); persistFilters('OPEN', savedView); }}
+                    onClick={() => { setStatusFilter('OPEN'); persistFilters('OPEN'); }}
                     className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'OPEN'
                             ? 'bg-success text-white'
@@ -259,7 +218,7 @@ export default function ConversationList({ conversations: inputConversations }: 
                     Открыты
                 </button>
                 <button
-                    onClick={() => { setStatusFilter('CLOSED'); persistFilters('CLOSED', savedView); }}
+                    onClick={() => { setStatusFilter('CLOSED'); persistFilters('CLOSED'); }}
                     className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'CLOSED'
                             ? 'bg-danger text-white'
@@ -268,22 +227,6 @@ export default function ConversationList({ conversations: inputConversations }: 
                 >
                     Закрыты
                 </button>
-                <div className="ml-auto">
-                    <select
-                        value={savedView}
-                        onChange={(e) => {
-                            const next = e.target.value as 'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK';
-                            setSavedView(next);
-                            persistFilters(statusFilter, next);
-                        }}
-                        className="text-[11px] px-2 py-1 rounded-md bg-surface border border-border text-text-secondary"
-                    >
-                        <option value="ALL">Вид: Все</option>
-                        <option value="MINE">Вид: Мои</option>
-                        <option value="UNASSIGNED">Вид: Без оператора</option>
-                        <option value="SLA_RISK">Вид: SLA риск</option>
-                    </select>
-                </div>
             </div>
 
             {/* Conversations List */}

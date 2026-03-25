@@ -91,17 +91,7 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
                 }
             });
 
-            const ageMs = Date.now() - new Date(conv.updatedAt).getTime();
-            const ageMin = Math.floor(ageMs / 60000);
-            const slaState = conv.status !== 'OPEN'
-                ? 'OK'
-                : ageMin >= 30
-                    ? 'OVERDUE'
-                    : ageMin >= 10
-                        ? 'WARNING'
-                        : 'OK';
-
-            return { ...conv, unreadCount, operatorReplyCount, slaState, ageMin };
+            return { ...conv, unreadCount, operatorReplyCount };
         }));
 
         const nextCursor = hasMore ? conversationsWithUnread[conversationsWithUnread.length - 1]?.id : null;
