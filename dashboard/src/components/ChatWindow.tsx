@@ -54,11 +54,12 @@ export default function ChatWindow() {
     }, [activeConversationId]);
 
     useEffect(() => {
-        // Load project members for mentions
+        // Load project members for mentions — only re-run when the active conversation changes,
+        // NOT on every conversations array update (would re-fetch on every socket event).
         const loadMembers = async () => {
             if (!activeConversationId) return;
             try {
-                const conv = conversations.find(c => c.id === activeConversationId);
+                const conv = useChatStore.getState().conversations.find(c => c.id === activeConversationId);
                 if (conv) {
                     const { data } = await getProjectMembers(conv.projectId);
                     const normalizedMembers = (data || []).map((member: any) => ({
@@ -74,7 +75,7 @@ export default function ChatWindow() {
             }
         };
         loadMembers();
-    }, [activeConversationId, conversations]);
+    }, [activeConversationId]); // 'conversations' intentionally omitted — read imperatively via getState()
 
     useEffect(() => {
         // Smooth scroll for new messages (incoming or outgoing)

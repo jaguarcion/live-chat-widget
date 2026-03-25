@@ -45,7 +45,7 @@ export default function DashboardPage({
     const navigate = useNavigate();
     const location = useLocation();
     const { token } = useAuthStore();
-    const { fetchConversations, connectSocket, disconnectSocket, activeConversationId, conversations, setActiveConversation } = useChatStore();
+    const { fetchConversations, connectSocket, disconnectSocket, activeConversationId, conversations, setActiveConversation, loading: conversationsLoading } = useChatStore();
     const {
         projects,
         selectedProjectId,
@@ -195,11 +195,17 @@ export default function DashboardPage({
             return;
         }
 
+        // Skip while conversations are loading — prevents flash to empty state when the
+        // project's conversation list hasn't arrived yet (e.g. navigating from super admin).
+        if (conversationsLoading || visibleConversations.length === 0) {
+            return;
+        }
+
         const stillVisible = visibleConversations.some(conversation => conversation.id === activeConversationId);
         if (!stillVisible) {
             setActiveConversation(null);
         }
-    }, [activeConversationId, visibleConversations, setActiveConversation]);
+    }, [activeConversationId, visibleConversations, conversationsLoading, setActiveConversation]);
 
     useEffect(() => {
         if (!isProjectScoped || activeView !== 'chat' || !selectedProjectId) {
@@ -209,7 +215,15 @@ export default function DashboardPage({
         const params = new URLSearchParams(location.search);
 
         if (activeConversationId) {
-            params.set('conversationId', activeConversationId);
+            // Only write the conversationId to the URL when it actually belongs to this project.
+            // Without this check, navigating from another project would temporarily pollute
+            // the URL with a stale conversationId, triggering an extra navigate() roundtrip.
+            const conv = useChatStore.getState().conversations.find(c => c.id === activeConversationId);
+            if (conv?.projectId === selectedProjectId) {
+                params.set('conversationId', activeConversationId);
+            } else {
+                params.delete('conversationId');
+            }
         } else {
             params.delete('conversationId');
         }
