@@ -403,7 +403,7 @@ export default function ChatWindow() {
                                         )}
                                     </div>
 
-                                    <div className={`${msg.isNote ? 'mt-1 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-700/60' : 'mt-0.5'}`}>
+                                    <div className={`${msg.isNote ? 'mt-1 p-3 rounded-lg bg-amber-100 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700/60' : 'mt-0.5'}`}>
 
                                     {msg.type === 'IMAGE' && msg.attachmentUrl && (
                                         <img

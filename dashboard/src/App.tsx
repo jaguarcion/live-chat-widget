@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import LoginPage from './pages/LoginPage';
@@ -7,6 +7,8 @@ import DashboardPage from './pages/DashboardPage';
 import LandingPage from './pages/LandingPage';
 import LandingPage2 from './pages/LandingPage2';
 import InteractiveEffectsDemo from './pages/InteractiveEffectsDemo';
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import NoProjectsPage from './pages/NoProjectsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitializing } = useAuthStore();
@@ -14,6 +16,45 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen flex items-center justify-center text-text-muted">Загрузка...</div>;
   }
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+function AppDashboard() {
+  const { user } = useAuthStore();
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const { getProjects } = await import('./api');
+        const { data } = await getProjects();
+        setProjects(data || []);
+      } catch (err) {
+        console.error('Failed to load projects:', err);
+        setProjects([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProjects();
+  }, []);
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-text-muted">Загрузка...</div>;
+  }
+
+  // SUPER_ADMIN always sees SuperAdminDashboard
+  if (user?.role === 'SUPER_ADMIN') {
+    return <SuperAdminDashboard />;
+  }
+
+  // Regular users: show DashboardPage if they have projects, otherwise NoProjectsPage
+  if (projects.length === 0) {
+    return <NoProjectsPage />;
+  }
+
+  return <DashboardPage />;
 }
 
 function StyleManager() {
@@ -76,7 +117,7 @@ function AppRoutes() {
           path="/app"
           element={
             <ProtectedRoute>
-              <DashboardPage />
+              <AppDashboard />
             </ProtectedRoute>
           }
         />

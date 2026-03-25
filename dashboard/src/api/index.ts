@@ -136,4 +136,16 @@ export const createWebhook = (projectId: string, data: any) => api.post(`/webhoo
 export const updateWebhook = (id: string, data: any) => api.put(`/webhooks/${id}`, data);
 export const deleteWebhook = (id: string) => api.delete(`/webhooks/${id}`);
 
+// Project Management (SuperAdmin)
+export const freezeProject = (projectId: string) => 
+    api.patch(`/projects/${projectId}/freeze`);
+export const deleteProject = (projectId: string) => 
+    api.delete(`/projects/${projectId}`);
+export const reassignAdmin = (projectId: string, newAdminUserId: string) => 
+    api.patch(`/projects/${projectId}/admin`, { newAdminUserId });
+export const getProjectStats = (projectId: string) => 
+    api.get(`/projects/${projectId}/stats`);
+export const getAllUsers = () => 
+    api.get(`/projects/users/all`);
+
 export default api;

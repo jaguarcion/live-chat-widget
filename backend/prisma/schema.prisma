@@ -15,7 +15,7 @@ model User {
   avatarUrl     String?            @db.Text
   title         String?
   showInGreeting Boolean  @default(true)
-  role          String             @default("OPERATOR")
+  role          String             @default("OPERATOR")  // OPERATOR, SUPER_ADMIN
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   conversations Conversation[]     @relation("AssignedOperator")
@@ -25,6 +25,7 @@ model User {
   authSessions  AuthSession[]
   accessTokenRevocations AccessTokenRevocation[]
   tokenRevocationState   UserTokenRevocation?
+  ownedProjects Project[]          @relation("ProjectOwner")
 }
 
 model AuthSession {
@@ -69,6 +70,9 @@ model Project {
   id            String             @id @default(uuid())
   name          String
   widgetKey     String             @unique @default(uuid())
+  status        String             @default("ACTIVE")  // ACTIVE, FROZEN, DELETED
+  ownerId       String?            // SuperAdmin who created it
+  owner         User?              @relation("ProjectOwner", fields: [ownerId], references: [id])
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   conversations Conversation[]
