@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
-import { createProject, getProjects } from '../api';
+import { useProjectStore } from '../store/projectStore';
+import { createProject } from '../api';
 import Sidebar from '../components/Sidebar';
 import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
@@ -12,15 +14,96 @@ import SearchPanel from '../components/SearchPanel';
 import AnalyticsPage from './AnalyticsPage';
 import LiveVisitorsPanel from '../components/LiveVisitorsPanel';
 
-export default function DashboardPage() {
+type DashboardView = 'chat' | 'settings' | 'dialogs' | 'channels' | 'search' | 'analytics' | 'live-visitors';
+type SettingsSection = 'appearance' | 'texts' | 'settings' | 'hours' | 'smtp' | 'webhooks' | 'members' | 'install' | 'team' | 'prechat' | 'automations';
+
+const isSettingsSection = (value?: string | null): value is SettingsSection => {
+    return value === 'appearance'
+        || value === 'texts'
+        || value === 'settings'
+        || value === 'hours'
+        || value === 'smtp'
+        || value === 'webhooks'
+        || value === 'members'
+        || value === 'install'
+        || value === 'team'
+        || value === 'prechat'
+        || value === 'automations';
+};
+
+interface DashboardPageProps {
+    initialProjectId?: string;
+    initialView?: DashboardView;
+    showBackToProjects?: boolean;
+}
+
+export default function DashboardPage({
+    initialProjectId,
+    initialView = 'chat',
+    showBackToProjects = false,
+}: DashboardPageProps) {
+    const navigate = useNavigate();
+    const location = useLocation();
     const { token } = useAuthStore();
     const { fetchConversations, connectSocket, disconnectSocket, activeConversationId, conversations, setActiveConversation } = useChatStore();
-    const [projects, setProjects] = useState<any[]>([]);
+    const {
+        projects,
+        selectedProjectId,
+        setSelectedProjectId,
+        loadProjects,
+    } = useProjectStore();
     const [showCreateProject, setShowCreateProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [creating, setCreating] = useState(false);
-    const [activeView, setActiveView] = useState<'chat' | 'settings' | 'dialogs' | 'channels' | 'search' | 'analytics' | 'live-visitors'>('chat');
+    const [activeView, setActiveView] = useState<DashboardView>(initialView);
     const [mobileShowInfo, setMobileShowInfo] = useState(false);
+    const isProjectScoped = Boolean(initialProjectId);
+    const queryConversationId = new URLSearchParams(location.search).get('conversationId');
+    const querySettingsSection = new URLSearchParams(location.search).get('section');
+
+    useEffect(() => {
+        if (initialProjectId) {
+            setSelectedProjectId(initialProjectId);
+        }
+    }, [initialProjectId, setSelectedProjectId]);
+
+    useEffect(() => {
+        setActiveView(initialView);
+    }, [initialView]);
+
+    useEffect(() => {
+        if (!isProjectScoped || !selectedProjectId) {
+            return;
+        }
+
+        localStorage.setItem(`project_view_${selectedProjectId}`, activeView);
+
+        const params = new URLSearchParams(location.search);
+        const conversationId = params.get('conversationId');
+        const section = params.get('section');
+        const savedSection = localStorage.getItem(`project_settings_section_${selectedProjectId}`) || 'appearance';
+        const targetPath = `/app/projects/${selectedProjectId}/${activeView}`;
+        const nextParams = new URLSearchParams();
+
+        if (activeView === 'chat' && conversationId) {
+            nextParams.set('conversationId', conversationId);
+        }
+        if (activeView === 'settings') {
+            if (section && isSettingsSection(section)) {
+                nextParams.set('section', section);
+                localStorage.setItem(`project_settings_section_${selectedProjectId}`, section);
+            } else if (isSettingsSection(savedSection)) {
+                nextParams.set('section', savedSection);
+            }
+        }
+
+        const nextSearch = nextParams.toString();
+        const targetUrl = nextSearch ? `${targetPath}?${nextSearch}` : targetPath;
+
+        if (`${location.pathname}${location.search}` !== targetUrl) {
+            navigate(targetUrl, { replace: true });
+        }
+    }, [isProjectScoped, selectedProjectId, activeView, location.pathname, location.search, navigate]);
 
     useEffect(() => {
         // Global hotkey handlers
@@ -40,32 +123,44 @@ export default function DashboardPage() {
     }, [activeView, activeConversationId]);
 
     useEffect(() => {
-        loadProjects();
-        fetchConversations();
-        const interval = setInterval(fetchConversations, 15000);
-        return () => {
-            clearInterval(interval);
-            disconnectSocket();
-        };
-    }, []);
+        const projectIds = selectedProjectId
+            ? [selectedProjectId]
+            : projects.map(p => p.id);
 
-    useEffect(() => {
-        if (token && projects.length > 0) {
-            connectSocket(token, projects.map(p => p.id));
+        if (token && projectIds.length > 0) {
+            connectSocket(token, projectIds);
         }
-    }, [token, projects]);
+    }, [token, projects, selectedProjectId]);
 
-    const loadProjects = async () => {
+    const loadProjectsForWorkspace = async () => {
         try {
-            const { data } = await getProjects();
-            setProjects(data);
-            if (data.length === 0) {
+            const availableProjects = await loadProjects({ status: 'ACTIVE' });
+
+            if (initialProjectId && availableProjects.some((project: any) => project.id === initialProjectId)) {
+                setSelectedProjectId(initialProjectId);
+            } else if (!selectedProjectId && availableProjects[0]?.id) {
+                setSelectedProjectId(availableProjects[0].id);
+            }
+
+            if (availableProjects.length === 0 && !isProjectScoped) {
                 setShowCreateProject(true);
             }
         } catch (err) {
             console.error('Failed to load projects:', err);
         }
     };
+
+    useEffect(() => {
+        fetchConversations({ reset: true, projectId: selectedProjectId || undefined });
+        const interval = setInterval(() => {
+            fetchConversations({ reset: true, projectId: selectedProjectId || undefined });
+        }, 15000);
+        loadProjectsForWorkspace();
+        return () => {
+            clearInterval(interval);
+            disconnectSocket();
+        };
+    }, [initialProjectId, selectedProjectId]);
 
     const handleCreateProject = async () => {
         if (!newProjectName.trim()) return;
@@ -74,7 +169,7 @@ export default function DashboardPage() {
             await createProject(newProjectName.trim());
             setNewProjectName('');
             setShowCreateProject(false);
-            await loadProjects();
+            await loadProjectsForWorkspace();
         } catch (err) {
             console.error('Failed to create project:', err);
         } finally {
@@ -82,7 +177,84 @@ export default function DashboardPage() {
         }
     };
 
-    const activeConversation = conversations.find(c => c.id === activeConversationId);
+    const visibleConversations = useMemo(() => {
+        if (!selectedProjectId) {
+            return conversations;
+        }
+
+        return conversations.filter(conversation => conversation.projectId === selectedProjectId);
+    }, [conversations, selectedProjectId]);
+
+    const activeProject = useMemo(
+        () => projects.find(project => project.id === selectedProjectId) || null,
+        [projects, selectedProjectId]
+    );
+
+    useEffect(() => {
+        if (!activeConversationId) {
+            return;
+        }
+
+        const stillVisible = visibleConversations.some(conversation => conversation.id === activeConversationId);
+        if (!stillVisible) {
+            setActiveConversation(null);
+        }
+    }, [activeConversationId, visibleConversations, setActiveConversation]);
+
+    useEffect(() => {
+        if (!isProjectScoped || activeView !== 'chat' || !selectedProjectId) {
+            return;
+        }
+
+        const params = new URLSearchParams(location.search);
+
+        if (activeConversationId) {
+            params.set('conversationId', activeConversationId);
+        } else {
+            params.delete('conversationId');
+        }
+
+        const nextSearch = params.toString();
+        const nextUrl = nextSearch
+            ? `/app/projects/${selectedProjectId}/${activeView}?${nextSearch}`
+            : `/app/projects/${selectedProjectId}/${activeView}`;
+
+        if (`${location.pathname}${location.search}` !== nextUrl) {
+            navigate(nextUrl, { replace: true });
+        }
+    }, [isProjectScoped, activeView, selectedProjectId, activeConversationId, location.pathname, location.search, navigate]);
+
+    useEffect(() => {
+        if (!isProjectScoped || activeView !== 'chat' || !queryConversationId) {
+            return;
+        }
+
+        const existsInList = visibleConversations.some(conversation => conversation.id === queryConversationId);
+        if (!existsInList) {
+            return;
+        }
+
+        if (activeConversationId !== queryConversationId) {
+            setActiveConversation(queryConversationId);
+        }
+    }, [isProjectScoped, activeView, queryConversationId, visibleConversations, activeConversationId, setActiveConversation]);
+
+    const resolvedInitialSettingsSection: SettingsSection = (() => {
+        if (isSettingsSection(querySettingsSection)) {
+            return querySettingsSection;
+        }
+
+        if (selectedProjectId) {
+            const persisted = localStorage.getItem(`project_settings_section_${selectedProjectId}`);
+            if (isSettingsSection(persisted)) {
+                return persisted;
+            }
+        }
+
+        return 'appearance';
+    })();
+
+    const activeConversation = visibleConversations.find(c => c.id === activeConversationId);
 
     // On mobile: show chat panel when conversation is active or creating project
     const mobileShowChat = !!(activeConversationId || showCreateProject);
@@ -230,26 +402,113 @@ export default function DashboardPage() {
         <div className="flex h-screen w-full overflow-hidden">
             <Sidebar activeView={activeView} onViewChange={setActiveView} />
 
-            {activeView === 'analytics' ? (
-                <div className="flex-1 min-w-0 overflow-auto"><AnalyticsPage /></div>
-            ) : activeView === 'live-visitors' ? (
-                <div className="flex-1 min-w-0 overflow-auto"><LiveVisitorsPanel /></div>
-            ) : activeView === 'settings' ? (
-                <div className="flex-1 min-w-0 overflow-auto"><SettingsPage initialSection={'appearance'} /></div>
-            ) : activeView === 'search' ? (
-                renderPanels(
-                    <SearchPanel onOpenConversation={() => setActiveView('chat')} />
-                )
-            ) : (
-                renderPanels(
-                    <>
-                        <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
-                            <h2 className="text-[16px] font-semibold text-text-primary">Диалоги</h2>
+            <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
+                {showBackToProjects && activeProject && (
+                    <div className="px-4 py-3 border-b border-border bg-surface-secondary flex items-center justify-between gap-4 shrink-0">
+                        <div className="min-w-0 flex items-center gap-3">
+                            <button
+                                onClick={() => navigate('/app')}
+                                className="px-3 py-1.5 rounded-lg bg-surface border border-border text-text-secondary hover:text-text-primary hover:bg-surface-tertiary transition-colors text-sm font-medium"
+                            >
+                                К проектам
+                            </button>
+                            <div className="min-w-0">
+                                <div className="text-xs uppercase tracking-wider text-text-muted">Проект</div>
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <div className="text-sm font-semibold text-text-primary truncate">{activeProject.name}</div>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
+                                        activeProject.status === 'ACTIVE'
+                                            ? 'bg-green-100 text-green-700'
+                                            : activeProject.status === 'FROZEN'
+                                                ? 'bg-amber-100 text-amber-700'
+                                                : 'bg-slate-200 text-slate-700'
+                                    }`}>
+                                        {activeProject.status === 'ACTIVE' ? 'ACTIVE' : activeProject.status === 'FROZEN' ? 'FROZEN' : 'ARCHIVED'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <ConversationList />
-                    </>
-                )
-            )}
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button
+                                onClick={() => setActiveView('chat')}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'chat' ? 'bg-primary text-white' : 'bg-surface border border-border text-text-secondary hover:text-text-primary hover:bg-surface-tertiary'}`}
+                            >
+                                Чаты
+                            </button>
+                            <button
+                                onClick={() => setActiveView('settings')}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'settings' ? 'bg-primary text-white' : 'bg-surface border border-border text-text-secondary hover:text-text-primary hover:bg-surface-tertiary'}`}
+                            >
+                                Редактировать
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {showBackToProjects && activeProject?.status === 'FROZEN' && (
+                    <div className="px-4 py-2 border-b border-amber-200 bg-amber-50 text-amber-800 text-xs font-medium">
+                        Проект заморожен: часть операций может быть недоступна до разморозки.
+                    </div>
+                )}
+
+                {showBackToProjects && activeProject?.status === 'ARCHIVED' && (
+                    <div className="px-4 py-2 border-b border-slate-300 bg-slate-100 text-slate-700 text-xs font-medium">
+                        Проект в архиве: рабочие разделы доступны в режиме просмотра и аудита.
+                    </div>
+                )}
+
+                {activeView === 'analytics' ? (
+                    <div className="flex-1 min-w-0 overflow-auto"><AnalyticsPage initialProjectId={selectedProjectId} projectLocked={isProjectScoped} /></div>
+                ) : activeView === 'live-visitors' ? (
+                    <div className="flex-1 min-w-0 overflow-auto"><LiveVisitorsPanel /></div>
+                ) : activeView === 'settings' ? (
+                    <div className="flex-1 min-w-0 overflow-auto">
+                        <SettingsPage
+                            initialSection={resolvedInitialSettingsSection}
+                            initialProjectId={selectedProjectId}
+                            projectLocked={isProjectScoped}
+                            onSectionChange={(section) => {
+                                if (!isProjectScoped || !selectedProjectId) {
+                                    return;
+                                }
+
+                                localStorage.setItem(`project_settings_section_${selectedProjectId}`, section);
+
+                                const params = new URLSearchParams(location.search);
+                                params.delete('conversationId');
+                                params.set('section', section);
+
+                                const nextSearch = params.toString();
+                                const nextUrl = nextSearch
+                                    ? `/app/projects/${selectedProjectId}/settings?${nextSearch}`
+                                    : `/app/projects/${selectedProjectId}/settings`;
+
+                                if (`${location.pathname}${location.search}` !== nextUrl) {
+                                    navigate(nextUrl, { replace: true });
+                                }
+                            }}
+                        />
+                    </div>
+                ) : activeView === 'search' ? (
+                    renderPanels(
+                        <SearchPanel onOpenConversation={() => setActiveView('chat')} />
+                    )
+                ) : (
+                    renderPanels(
+                        <>
+                            <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0 gap-3">
+                                <div>
+                                    <h2 className="text-[16px] font-semibold text-text-primary">Диалоги</h2>
+                                    {activeProject && (
+                                        <p className="text-xs text-text-muted mt-0.5">{activeProject.name}</p>
+                                    )}
+                                </div>
+                            </div>
+                            <ConversationList conversations={visibleConversations} />
+                        </>
+                    )
+                )}
+            </div>
         </div>
     );
 }

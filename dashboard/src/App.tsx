@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
+import { useProjectStore } from './store/projectStore';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import LandingPage from './pages/LandingPage';
@@ -9,6 +11,17 @@ import LandingPage2 from './pages/LandingPage2';
 import InteractiveEffectsDemo from './pages/InteractiveEffectsDemo';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import NoProjectsPage from './pages/NoProjectsPage';
+
+type ProjectWorkspaceView = 'chat' | 'settings' | 'search' | 'analytics' | 'live-visitors';
+
+const isProjectWorkspaceView = (value?: string): value is ProjectWorkspaceView => {
+  return value === 'chat' || value === 'settings' || value === 'search' || value === 'analytics' || value === 'live-visitors';
+};
+
+const getSavedProjectView = (projectId: string): ProjectWorkspaceView => {
+  const raw = localStorage.getItem(`project_view_${projectId}`) || 'chat';
+  return isProjectWorkspaceView(raw) ? raw : 'chat';
+};
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitializing } = useAuthStore();
@@ -20,25 +33,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AppDashboard() {
   const { user } = useAuthStore();
-  const [projects, setProjects] = useState<any[]>([]);
+  const { projects, loadProjects: loadProjectsFromStore } = useProjectStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadProjects = async () => {
+    const loadProjectsForGate = async () => {
       try {
-        const { getProjects } = await import('./api');
-        const { data } = await getProjects();
-        setProjects(data || []);
+        await loadProjectsFromStore({ status: 'ACTIVE' });
       } catch (err) {
         console.error('Failed to load projects:', err);
-        setProjects([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadProjects();
-  }, []);
+    loadProjectsForGate();
+  }, [loadProjectsFromStore]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-text-muted">Загрузка...</div>;
@@ -55,6 +65,22 @@ function AppDashboard() {
   }
 
   return <DashboardPage />;
+}
+
+function ProjectWorkspaceRoute() {
+  const { projectId, view } = useParams();
+
+  if (!projectId) {
+    return <Navigate to="/app" replace />;
+  }
+
+  return (
+    <DashboardPage
+      initialProjectId={projectId}
+      initialView={isProjectWorkspaceView(view) ? view : getSavedProjectView(projectId)}
+      showBackToProjects
+    />
+  );
 }
 
 function StyleManager() {
@@ -118,6 +144,22 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <AppDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app/projects/:projectId"
+          element={
+            <ProtectedRoute>
+              <ProjectWorkspaceRoute />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app/projects/:projectId/:view"
+          element={
+            <ProtectedRoute>
+              <ProjectWorkspaceRoute />
             </ProtectedRoute>
           }
         />

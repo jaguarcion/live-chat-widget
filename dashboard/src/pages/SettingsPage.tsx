@@ -63,7 +63,17 @@ interface TriggerFilters {
     to: string;
 }
 
-export default function SettingsPage({ initialSection = 'appearance' }: { initialSection?: SettingsSection }) {
+export default function SettingsPage({
+    initialSection = 'appearance',
+    initialProjectId,
+    projectLocked = false,
+    onSectionChange,
+}: {
+    initialSection?: SettingsSection;
+    initialProjectId?: string;
+    projectLocked?: boolean;
+    onSectionChange?: (section: SettingsSection) => void;
+}) {
     const [projects, setProjects] = useState<any[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection);
@@ -156,6 +166,11 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
         if (initialSection) setActiveSection(initialSection);
     }, [initialSection]);
     useEffect(() => {
+        if (initialProjectId) {
+            setSelectedProjectId(initialProjectId);
+        }
+    }, [initialProjectId]);
+    useEffect(() => {
         if (selectedProjectId) {
             loadSettings(selectedProjectId);
             loadWebhooks(selectedProjectId);
@@ -168,8 +183,17 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
     const loadProjects = async () => {
         try {
             const { data } = await getProjects();
-            setProjects(data);
-            if (data.length > 0) setSelectedProjectId(data[0].id);
+            const availableProjects = data || [];
+            setProjects(availableProjects);
+            setSelectedProjectId(current => {
+                if (initialProjectId && availableProjects.some((project: any) => project.id === initialProjectId)) {
+                    return initialProjectId;
+                }
+                if (current && availableProjects.some((project: any) => project.id === current)) {
+                    return current;
+                }
+                return availableProjects[0]?.id || '';
+            });
             setLoading(false);
         } catch { setLoading(false); }
     };
@@ -374,19 +398,22 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                             <select
                                 value={selectedProjectId}
                                 onChange={e => setSelectedProjectId(e.target.value)}
+                                disabled={projectLocked}
                                 className="flex-1 px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                             >
                                 {projects.map(p => (
                                     <option key={p.id} value={p.id}>{p.name}</option>
                                 ))}
                             </select>
-                            <button
-                                onClick={() => setShowCreateModal(true)}
-                                className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors border-none cursor-pointer text-lg font-bold"
-                                title="Создать проект"
-                            >
-                                +
-                            </button>
+                            {!projectLocked && (
+                                <button
+                                    onClick={() => setShowCreateModal(true)}
+                                    className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors border-none cursor-pointer text-lg font-bold"
+                                    title="Создать проект"
+                                >
+                                    +
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -400,7 +427,10 @@ export default function SettingsPage({ initialSection = 'appearance' }: { initia
                         {navItems.map(item => (
                             <button
                                 key={item.key}
-                                onClick={() => setActiveSection(item.key)}
+                                onClick={() => {
+                                    setActiveSection(item.key);
+                                    onSectionChange?.(item.key);
+                                }}
                                 className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all border-none cursor-pointer flex items-center gap-2.5 ${activeSection === item.key
                                     ? 'bg-primary/15 text-primary font-medium'
                                     : 'bg-transparent text-text-secondary hover:bg-surface-tertiary/50 hover:text-text-primary'

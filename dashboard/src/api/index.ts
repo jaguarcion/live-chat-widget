@@ -34,8 +34,15 @@ export const logoutAllAPI = () => api.post('/auth/logout-all');
 export const refreshAPI = () => api.post('/auth/refresh');
 
 // Projects & Members
-export const getProjects = () => api.get('/projects');
-export const createProject = (name: string) => api.post('/projects', { name });
+export const getProjects = (params?: {
+    status?: 'ACTIVE' | 'FROZEN' | 'ARCHIVED' | 'ALL';
+    q?: string;
+    ownerId?: string;
+    adminUserId?: string;
+    hasActivityDays?: number;
+}) => api.get('/projects', { params });
+export const createProject = (name: string, adminUserId?: string, timezone?: string) =>
+    api.post('/projects', { name, adminUserId, timezone });
 export const getProjectMembers = (projectId: string) => api.get(`/projects/${projectId}/members`);
 export const addProjectMember = (projectId: string, email: string, projectRole: string) =>
     api.post(`/projects/${projectId}/members`, { email, projectRole });
@@ -45,7 +52,15 @@ export const removeProjectMember = (projectId: string, userId: string) =>
     api.delete(`/projects/${projectId}/members/${userId}`);
 
 // Conversations
-export const getConversations = () => api.get('/conversations');
+export const getConversations = (params?: {
+    limit?: number;
+    cursor?: string;
+    projectId?: string;
+    q?: string;
+    status?: 'ALL' | 'OPEN' | 'CLOSED';
+    operatorId?: 'me' | 'unassigned';
+    isPinned?: 'true';
+}) => api.get('/conversations', { params });
 export const getMessages = (conversationId: string) =>
     api.get(`/conversations/${conversationId}/messages`);
 export const sendMessage = (conversationId: string, text: string, type: string = 'TEXT', attachmentUrl?: string) =>
@@ -138,9 +153,15 @@ export const deleteWebhook = (id: string) => api.delete(`/webhooks/${id}`);
 
 // Project Management (SuperAdmin)
 export const freezeProject = (projectId: string) => 
-    api.patch(`/projects/${projectId}/freeze`);
-export const deleteProject = (projectId: string) => 
-    api.delete(`/projects/${projectId}`);
+    api.patch(`/projects/${projectId}/freeze`, { freeze: true });
+export const unfreezeProject = (projectId: string) =>
+    api.patch(`/projects/${projectId}/freeze`, { freeze: false });
+export const archiveProject = (projectId: string) =>
+    api.patch(`/projects/${projectId}/archive`);
+export const deleteProject = (projectId: string, confirmText: string) =>
+    api.delete(`/projects/${projectId}`, { data: { confirmText } });
+export const getProjectDeleteImpact = (projectId: string) =>
+    api.get(`/projects/${projectId}/delete-impact`);
 export const reassignAdmin = (projectId: string, newAdminUserId: string) => 
     api.patch(`/projects/${projectId}/admin`, { newAdminUserId });
 export const getProjectStats = (projectId: string) => 

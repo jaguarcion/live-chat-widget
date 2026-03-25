@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useAuthStore } from '../store/authStore';
 import { subDays, format } from 'date-fns';
 import {
+    getProjects,
     getAnalyticsOverview,
     getAnalyticsOperators,
     getAnalyticsDailyChart,
     exportConversations as exportConversationsApi,
 } from '../api';
 
-export default function AnalyticsPage() {
-    const { user } = useAuthStore();
-    const [activeProject, setActiveProject] = useState<string>('');
+export default function AnalyticsPage({ initialProjectId = '', projectLocked = false }: { initialProjectId?: string; projectLocked?: boolean }) {
+    const [projects, setProjects] = useState<any[]>([]);
+    const [activeProject, setActiveProject] = useState<string>(initialProjectId);
     const [fromDate, setFromDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
     const [toDate, setToDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
@@ -19,7 +19,28 @@ export default function AnalyticsPage() {
     const [daily, setDaily] = useState<any>([]);
     const [loading, setLoading] = useState(false);
 
-    const projects = (user as any)?.memberships || [];
+    useEffect(() => {
+        const loadProjects = async () => {
+            try {
+                const { data } = await getProjects();
+                const availableProjects = data || [];
+                setProjects(availableProjects);
+                setActiveProject(current => {
+                    if (initialProjectId && availableProjects.some((project: any) => project.id === initialProjectId)) {
+                        return initialProjectId;
+                    }
+                    if (current && availableProjects.some((project: any) => project.id === current)) {
+                        return current;
+                    }
+                    return availableProjects[0]?.id || '';
+                });
+            } catch (err) {
+                console.error('Failed to load projects for analytics:', err);
+            }
+        };
+
+        loadProjects();
+    }, [initialProjectId]);
 
     const loadData = async () => {
         if (!activeProject) return;
@@ -83,11 +104,12 @@ export default function AnalyticsPage() {
                             <select
                                 value={activeProject}
                                 onChange={(e) => setActiveProject(e.target.value)}
+                                disabled={projectLocked}
                                 className="w-full px-3 py-2 rounded-lg bg-surface-secondary border border-border text-text-primary text-sm"
                             >
                                 <option value="">Выберите проект</option>
-                                {projects?.map((m: any) => (
-                                    <option key={m.projectId} value={m.projectId}>{m.project?.name || m.projectId}</option>
+                                {projects.map((project: any) => (
+                                    <option key={project.id} value={project.id}>{project.name}</option>
                                 ))}
                             </select>
                         </div>

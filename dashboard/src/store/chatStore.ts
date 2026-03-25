@@ -85,8 +85,26 @@ interface ChatState {
     liveVisitors: LiveVisitor[];
     mentions: MentionNotif[];
     loading: boolean;
+    loadingMoreConversations: boolean;
+    hasMoreConversations: boolean;
+    conversationsCursor: string | null;
+    conversationFilterQuery: string;
+    conversationFilterStatus: 'ALL' | 'OPEN' | 'CLOSED';
+    conversationFilterOperator: 'all' | 'me' | 'unassigned';
 
-    fetchConversations: () => Promise<void>;
+    setConversationFilters: (filters: {
+        query?: string;
+        status?: 'ALL' | 'OPEN' | 'CLOSED';
+        operator?: 'all' | 'me' | 'unassigned';
+    }) => void;
+    fetchConversations: (options?: {
+        reset?: boolean;
+        projectId?: string;
+        query?: string;
+        status?: 'ALL' | 'OPEN' | 'CLOSED';
+        operator?: 'all' | 'me' | 'unassigned';
+    }) => Promise<void>;
+    loadMoreConversations: (projectId?: string) => Promise<void>;
     setActiveConversation: (id: string | null) => Promise<void>;
     fetchMessages: (conversationId: string) => Promise<void>;
     addMessage: (message: Message) => void;
@@ -107,15 +125,86 @@ export const useChatStore = create<ChatState>((set, get) => ({
     liveVisitors: [],
     mentions: [],
     loading: false,
+    loadingMoreConversations: false,
+    hasMoreConversations: true,
+    conversationsCursor: null,
+    conversationFilterQuery: '',
+    conversationFilterStatus: 'ALL',
+    conversationFilterOperator: 'all',
 
-    fetchConversations: async () => {
-        set({ loading: true });
-        try {
-            const { data } = await getConversations();
-            set({ conversations: data, loading: false });
-        } catch {
-            set({ loading: false });
+    setConversationFilters: (filters) => {
+        set(state => ({
+            conversationFilterQuery: filters.query !== undefined ? filters.query : state.conversationFilterQuery,
+            conversationFilterStatus: filters.status !== undefined ? filters.status : state.conversationFilterStatus,
+            conversationFilterOperator: filters.operator !== undefined ? filters.operator : state.conversationFilterOperator,
+        }));
+    },
+
+    fetchConversations: async (options) => {
+        const reset = options?.reset ?? true;
+        if (reset) {
+            set({ loading: true });
+        } else {
+            set({ loadingMoreConversations: true });
         }
+
+        try {
+            const state = get();
+            const effectiveQuery = options?.query ?? state.conversationFilterQuery;
+            const effectiveStatus = options?.status ?? state.conversationFilterStatus;
+            const effectiveOperator = options?.operator ?? state.conversationFilterOperator;
+            const operatorParam = effectiveOperator === 'all' ? undefined : effectiveOperator;
+            const { data } = await getConversations({
+                limit: 50,
+                projectId: options?.projectId,
+                cursor: reset ? undefined : state.conversationsCursor || undefined,
+                q: effectiveQuery || undefined,
+                status: effectiveStatus,
+                operatorId: operatorParam,
+            });
+
+            if (Array.isArray(data)) {
+                set({
+                    conversations: data,
+                    loading: false,
+                    loadingMoreConversations: false,
+                    hasMoreConversations: false,
+                    conversationsCursor: null,
+                });
+                return;
+            }
+
+            const incoming = data.items || [];
+            const merged = reset
+                ? incoming
+                : (() => {
+                    const map = new Map<string, Conversation>();
+                    for (const conversation of state.conversations) map.set(conversation.id, conversation);
+                    for (const conversation of incoming) map.set(conversation.id, conversation);
+                    return Array.from(map.values()).sort((a, b) =>
+                        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                    );
+                })();
+
+            set({
+                conversations: merged,
+                loading: false,
+                loadingMoreConversations: false,
+                hasMoreConversations: Boolean(data.hasMore),
+                conversationsCursor: data.nextCursor || null,
+                conversationFilterQuery: effectiveQuery,
+                conversationFilterStatus: effectiveStatus,
+                conversationFilterOperator: effectiveOperator,
+            });
+        } catch {
+            set({ loading: false, loadingMoreConversations: false });
+        }
+    },
+
+    loadMoreConversations: async (projectId?: string) => {
+        const { hasMoreConversations, loadingMoreConversations, loading } = get();
+        if (!hasMoreConversations || loadingMoreConversations || loading) return;
+        await get().fetchConversations({ reset: false, projectId });
     },
 
     setActiveConversation: async (id: string | null) => {
@@ -210,6 +299,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     connectSocket: (token: string, projectIds: string[]) => {
+        const existingSocket = get().socket;
+        if (existingSocket) {
+            existingSocket.disconnect();
+        }
+
         const socket = io('/', { transports: ['websocket'] });
 
         socket.on('connect', () => {

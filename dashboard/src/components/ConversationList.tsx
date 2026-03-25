@@ -1,7 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChatStore } from '../store/chatStore';
 import type { Conversation } from '../store/chatStore';
 import { getDiceBearUrl } from '../utils/avatarUtils';
+import { useAuthStore } from '../store/authStore';
+import { useProjectStore } from '../store/projectStore';
+
+const ITEM_HEIGHT = 92;
+const OVERSCAN = 8;
 
 function timeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -13,7 +18,7 @@ function timeAgo(dateStr: string): string {
     return `${Math.floor(hours / 24)}д`;
 }
 
-function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conversation: Conversation; isActive: boolean; isOnline: boolean; isTyping: boolean }) {
+function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conversation: Conversation & { slaState?: 'OK' | 'WARNING' | 'OVERDUE'; ageMin?: number }; isActive: boolean; isOnline: boolean; isTyping: boolean }) {
     const { setActiveConversation } = useChatStore();
     const lastMessage = conversation.messages[0];
 
@@ -63,6 +68,11 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
                         )}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
+                        {conversation.slaState && conversation.status === 'OPEN' && conversation.slaState !== 'OK' && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold leading-none ${conversation.slaState === 'OVERDUE' ? 'bg-danger text-white' : 'bg-amber-100 text-amber-700'}`}>
+                                {conversation.slaState === 'OVERDUE' ? 'SLA нарушен' : 'SLA риск'}
+                            </span>
+                        )}
                         {!!conversation.unreadCount && conversation.unreadCount > 0 && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-danger text-white font-semibold leading-none">
                                 {conversation.unreadCount}
@@ -84,12 +94,84 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
     );
 }
 
-export default function ConversationList() {
-    const { conversations, activeConversationId, loading, onlineVisitors, typingStatus } = useChatStore();
-    const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
+export default function ConversationList({ conversations: inputConversations }: { conversations?: Conversation[] }) {
+    const {
+        conversations,
+        activeConversationId,
+        loading,
+        onlineVisitors,
+        typingStatus,
+        loadMoreConversations,
+        hasMoreConversations,
+        loadingMoreConversations,
+        fetchConversations,
+        setConversationFilters,
+    } = useChatStore();
+    const { user } = useAuthStore();
+    const { selectedProjectId } = useProjectStore();
+    const filterScope = selectedProjectId || 'all-projects';
+    const statusStorageKey = `operator_status_filter_${filterScope}`;
+    const savedViewStorageKey = `operator_saved_view_${filterScope}`;
+    const searchStorageKey = `operator_search_query_${filterScope}`;
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>(() =>
+        (localStorage.getItem(statusStorageKey) as 'ALL' | 'OPEN' | 'CLOSED') || 'ALL'
+    );
+    const [savedView, setSavedView] = useState<'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK'>(() =>
+        (localStorage.getItem(savedViewStorageKey) as 'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK') || 'ALL'
+    );
+    const [searchQuery, setSearchQuery] = useState(() => localStorage.getItem(searchStorageKey) || '');
+    const listRef = useRef<HTMLDivElement | null>(null);
+    const [scrollTop, setScrollTop] = useState(0);
+    const [viewportHeight, setViewportHeight] = useState(620);
+    const sourceConversations = inputConversations ?? conversations;
+
+    const persistFilters = (nextStatus: 'ALL' | 'OPEN' | 'CLOSED', nextView: 'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK') => {
+        localStorage.setItem(statusStorageKey, nextStatus);
+        localStorage.setItem(savedViewStorageKey, nextView);
+    };
+
+    useEffect(() => {
+        localStorage.setItem(searchStorageKey, searchQuery);
+    }, [searchQuery, searchStorageKey]);
+
+    useEffect(() => {
+        const nextStatus = (localStorage.getItem(statusStorageKey) as 'ALL' | 'OPEN' | 'CLOSED') || 'ALL';
+        const nextView = (localStorage.getItem(savedViewStorageKey) as 'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK') || 'ALL';
+        const nextQuery = localStorage.getItem(searchStorageKey) || '';
+
+        setStatusFilter(nextStatus);
+        setSavedView(nextView);
+        setSearchQuery(nextQuery);
+    }, [statusStorageKey, savedViewStorageKey, searchStorageKey]);
+
+    useEffect(() => {
+        if (!listRef.current) return;
+        setViewportHeight(listRef.current.clientHeight || 620);
+    }, []);
+
+    useEffect(() => {
+        const operator = savedView === 'MINE' ? 'me' : savedView === 'UNASSIGNED' ? 'unassigned' : 'all';
+        setConversationFilters({
+            query: searchQuery,
+            status: statusFilter,
+            operator,
+        });
+
+        const timer = setTimeout(() => {
+            fetchConversations({
+                reset: true,
+                projectId: selectedProjectId || undefined,
+                query: searchQuery,
+                status: statusFilter,
+                operator,
+            });
+        }, 250);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, statusFilter, savedView, selectedProjectId]);
 
     const visibleConversations = useMemo(() => {
-        let filtered = conversations;
+        let filtered = [...(sourceConversations as Array<Conversation & { slaState?: 'OK' | 'WARNING' | 'OVERDUE' }>)];
 
         // Apply status filter
         if (statusFilter === 'OPEN') {
@@ -98,13 +180,35 @@ export default function ConversationList() {
             filtered = filtered.filter(c => c.status === 'CLOSED');
         }
 
+        if (savedView === 'MINE') {
+            filtered = filtered.filter(c => c.operatorId === user?.id);
+        } else if (savedView === 'UNASSIGNED') {
+            filtered = filtered.filter(c => !c.operatorId);
+        } else if (savedView === 'SLA_RISK') {
+            filtered = filtered.filter(c => c.status === 'OPEN' && c.slaState && c.slaState !== 'OK');
+        }
+
         // Sort by most recently updated
-        filtered.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        filtered.sort((a, b) => {
+            const slaWeight = (value?: string) => value === 'OVERDUE' ? 2 : value === 'WARNING' ? 1 : 0;
+            const slaDiff = slaWeight((b as any).slaState) - slaWeight((a as any).slaState);
+            if (slaDiff !== 0) return slaDiff;
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        });
 
         return filtered;
-    }, [conversations, statusFilter]);
+    }, [sourceConversations, statusFilter, savedView, user?.id]);
 
-    if (loading && conversations.length === 0) {
+    const startIndex = Math.max(Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN, 0);
+    const endIndex = Math.min(
+        Math.ceil((scrollTop + viewportHeight) / ITEM_HEIGHT) + OVERSCAN,
+        visibleConversations.length
+    );
+    const virtualConversations = visibleConversations.slice(startIndex, endIndex);
+    const topSpacer = startIndex * ITEM_HEIGHT;
+    const bottomSpacer = (visibleConversations.length - endIndex) * ITEM_HEIGHT;
+
+    if (loading && sourceConversations.length === 0) {
         return (
             <div className="flex-1 flex items-center justify-center p-4">
                 <div className="text-text-muted text-sm">Загрузка...</div>
@@ -112,7 +216,7 @@ export default function ConversationList() {
         );
     }
 
-    if (conversations.length === 0) {
+    if (sourceConversations.length === 0) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
                 <svg className="w-12 h-12 text-text-muted mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -128,8 +232,14 @@ export default function ConversationList() {
         <div className="flex-1 min-h-0 flex flex-col bg-surface">
             {/* Filter Bar */}
             <div className="px-3 py-2.5 border-b border-border bg-surface-secondary flex items-center gap-1.5 flex-shrink-0">
+                <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Поиск по имени/email"
+                    className="flex-1 min-w-[140px] text-[12px] px-2.5 py-1 rounded-md bg-surface border border-border text-text-secondary"
+                />
                 <button
-                    onClick={() => setStatusFilter('ALL')}
+                    onClick={() => { setStatusFilter('ALL'); persistFilters('ALL', savedView); }}
                     className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'ALL'
                             ? 'bg-primary text-white'
@@ -139,7 +249,7 @@ export default function ConversationList() {
                     Все
                 </button>
                 <button
-                    onClick={() => setStatusFilter('OPEN')}
+                    onClick={() => { setStatusFilter('OPEN'); persistFilters('OPEN', savedView); }}
                     className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'OPEN'
                             ? 'bg-success text-white'
@@ -149,7 +259,7 @@ export default function ConversationList() {
                     Открыты
                 </button>
                 <button
-                    onClick={() => setStatusFilter('CLOSED')}
+                    onClick={() => { setStatusFilter('CLOSED'); persistFilters('CLOSED', savedView); }}
                     className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-all ${
                         statusFilter === 'CLOSED'
                             ? 'bg-danger text-white'
@@ -158,23 +268,64 @@ export default function ConversationList() {
                 >
                     Закрыты
                 </button>
+                <div className="ml-auto">
+                    <select
+                        value={savedView}
+                        onChange={(e) => {
+                            const next = e.target.value as 'ALL' | 'MINE' | 'UNASSIGNED' | 'SLA_RISK';
+                            setSavedView(next);
+                            persistFilters(statusFilter, next);
+                        }}
+                        className="text-[11px] px-2 py-1 rounded-md bg-surface border border-border text-text-secondary"
+                    >
+                        <option value="ALL">Вид: Все</option>
+                        <option value="MINE">Вид: Мои</option>
+                        <option value="UNASSIGNED">Вид: Без оператора</option>
+                        <option value="SLA_RISK">Вид: SLA риск</option>
+                    </select>
+                </div>
             </div>
 
             {/* Conversations List */}
-            <div className="flex-1 overflow-y-auto">
+            <div
+                ref={listRef}
+                onScroll={(e) => {
+                    const target = e.currentTarget;
+                    setScrollTop(target.scrollTop);
+                    setViewportHeight(target.clientHeight);
+                }}
+                className="flex-1 overflow-y-auto"
+            >
                 {visibleConversations.length === 0 ? (
                     <div className="flex h-full items-center justify-center p-6 text-center text-sm text-text-muted">
                         Для этого фильтра диалогов нет
                     </div>
-                ) : visibleConversations.map((conv) => (
-                <ConversationItem
-                    key={conv.id}
-                    conversation={conv}
-                    isActive={activeConversationId === conv.id}
-                    isOnline={onlineVisitors.has(conv.visitorId)}
-                    isTyping={typingStatus[conv.id]?.isTyping || false}
-                />
-                ))}
+                ) : (
+                    <>
+                        {topSpacer > 0 && <div style={{ height: topSpacer }} />}
+                        {virtualConversations.map((conv) => (
+                            <ConversationItem
+                                key={conv.id}
+                                conversation={conv}
+                                isActive={activeConversationId === conv.id}
+                                isOnline={onlineVisitors.has(conv.visitorId)}
+                                isTyping={typingStatus[conv.id]?.isTyping || false}
+                            />
+                        ))}
+                        {bottomSpacer > 0 && <div style={{ height: bottomSpacer }} />}
+                    </>
+                )}
+                {hasMoreConversations && (
+                    <div className="p-3 border-t border-border bg-surface-secondary">
+                        <button
+                            onClick={() => loadMoreConversations(selectedProjectId || undefined)}
+                            disabled={loadingMoreConversations}
+                            className="w-full py-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-text-primary hover:bg-surface-tertiary transition-colors text-sm font-medium disabled:opacity-50"
+                        >
+                            {loadingMoreConversations ? 'Загрузка...' : 'Загрузить еще'}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

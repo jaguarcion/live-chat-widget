@@ -1,12 +1,10 @@
 import { prisma } from '../db';
+import { canAccessProject } from './policy';
 
 export const hasProjectAccess = async (userId: string, projectId: string): Promise<boolean> => {
-    const membership = await prisma.projectMember.findUnique({
-        where: { userId_projectId: { userId, projectId } },
-        select: { userId: true }
-    });
-
-    return Boolean(membership);
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!user) return false;
+    return canAccessProject({ userId, role: user.role }, projectId);
 };
 
 export const getConversationProjectId = async (conversationId: string): Promise<string | null> => {
@@ -25,6 +23,13 @@ export const hasConversationAccess = async (userId: string, conversationId: stri
 };
 
 export const hasVisitorAccess = async (userId: string, visitorId: string): Promise<boolean> => {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!user) return false;
+    if (user.role === 'SUPER_ADMIN') {
+        const conversation = await prisma.conversation.findFirst({ where: { visitorId }, select: { id: true } });
+        return Boolean(conversation);
+    }
+
     const conversation = await prisma.conversation.findFirst({
         where: {
             visitorId,

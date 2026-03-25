@@ -9,14 +9,38 @@ import { hasConversationAccess, hasProjectAccess } from '../services/accessContr
 export const getConversations = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user?.userId;
+        const userRole = req.user?.role;
         if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
-        // Find all projects this operator belongs to
-        const memberships = await prisma.projectMember.findMany({
-            where: { userId },
-            select: { projectId: true }
-        });
-        const projectIds = memberships.map(m => m.projectId);
+        const limitRaw = Number(req.query.limit ?? 50);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+        const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
+        const projectIdFilter = typeof req.query.projectId === 'string' ? req.query.projectId : undefined;
+        const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+        let projectIds: string[] = [];
+
+        if (userRole === 'SUPER_ADMIN') {
+            const projects = await prisma.project.findMany({
+                where: { status: 'ACTIVE' },
+                select: { id: true }
+            });
+            projectIds = projects.map(project => project.id);
+        } else {
+            const memberships = await prisma.projectMember.findMany({
+                where: { userId },
+                select: { projectId: true }
+            });
+            projectIds = memberships.map(m => m.projectId);
+        }
+
+        if (projectIdFilter) {
+            if (!projectIds.includes(projectIdFilter)) {
+                res.json({ items: [], nextCursor: null, hasMore: false });
+                return;
+            }
+            projectIds = [projectIdFilter];
+        }
 
         // Build optional filters
         const where: any = { projectId: { in: projectIds } };
@@ -24,9 +48,17 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
         if (req.query.operatorId === 'me') where.operatorId = userId;
         else if (req.query.operatorId === 'unassigned') where.operatorId = null;
         if (req.query.isPinned === 'true') where.isPinned = true;
+        if (query) {
+            where.OR = [
+                { visitor: { name: { contains: query } } },
+                { visitor: { email: { contains: query } } },
+            ];
+        }
 
         const conversations = await prisma.conversation.findMany({
             where,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            take: limit + 1,
             include: {
                 visitor: true,
                 operator: { select: { id: true, name: true, email: true } },
@@ -36,10 +68,13 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
                     take: 1
                 }
             },
-            orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }]
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }]
         });
 
-        const conversationsWithUnread = await Promise.all(conversations.map(async (conv: any) => {
+        const hasMore = conversations.length > limit;
+        const pageItems = hasMore ? conversations.slice(0, limit) : conversations;
+
+        const conversationsWithUnread = await Promise.all(pageItems.map(async (conv: any) => {
             const unreadCount = await prisma.message.count({
                 where: {
                     conversationId: conv.id,
@@ -56,10 +91,21 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
                 }
             });
 
-            return { ...conv, unreadCount, operatorReplyCount };
+            const ageMs = Date.now() - new Date(conv.updatedAt).getTime();
+            const ageMin = Math.floor(ageMs / 60000);
+            const slaState = conv.status !== 'OPEN'
+                ? 'OK'
+                : ageMin >= 30
+                    ? 'OVERDUE'
+                    : ageMin >= 10
+                        ? 'WARNING'
+                        : 'OK';
+
+            return { ...conv, unreadCount, operatorReplyCount, slaState, ageMin };
         }));
 
-        res.json(conversationsWithUnread);
+        const nextCursor = hasMore ? conversationsWithUnread[conversationsWithUnread.length - 1]?.id : null;
+        res.json({ items: conversationsWithUnread, nextCursor, hasMore });
     } catch (error) {
         console.error('Get conversations error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -269,6 +315,15 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
             } catch (e) {
                 console.error('Socket broadcast error (join):', e);
             }
+        } else if (operatorChanged && !operatorId) {
+            logEvent(conversation.projectId, 'OPERATOR_UNASSIGNED', {
+                conversationId: id,
+                previousOperatorId: existingConversation.operatorId,
+            });
+            triggerWebhook(conversation.projectId, 'operator_unassigned', {
+                conversationId: id,
+                previousOperatorId: existingConversation.operatorId,
+            });
         }
 
         try {
