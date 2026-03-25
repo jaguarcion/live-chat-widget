@@ -21,6 +21,7 @@ export default function ChatWindow() {
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [updatingConversation, setUpdatingConversation] = useState(false);
     const [actionError, setActionError] = useState('');
+    const [showTransferModal, setShowTransferModal] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -31,6 +32,15 @@ export default function ChatWindow() {
     const isAssignedToMe = !!(user?.id && activeConversation?.operatorId === user.id);
     const canClaimConversation = Boolean(activeConversationId && user?.id && !activeConversation?.operatorId && activeConversation?.status === 'OPEN');
     const canEscalateConversation = Boolean(activeConversationId && isAssignedToMe && activeConversation?.status === 'OPEN');
+    const canTransferConversation = Boolean(
+        activeConversationId
+        && activeConversation?.status === 'OPEN'
+        && (isAssignedToMe || user?.role === 'SUPER_ADMIN')
+    );
+    const assignmentCandidates = members.filter(member => {
+        const memberUserId = member.user?.id || member.id;
+        return Boolean(memberUserId && memberUserId !== activeConversation?.operatorId);
+    });
 
     const formatMsgTime = (value: string | Date) =>
         new Date(value).toLocaleTimeString('ru-RU', { hour: 'numeric', minute: '2-digit' });
@@ -51,7 +61,13 @@ export default function ChatWindow() {
                 const conv = conversations.find(c => c.id === activeConversationId);
                 if (conv) {
                     const { data } = await getProjectMembers(conv.projectId);
-                    setMembers(data || []);
+                    const normalizedMembers = (data || []).map((member: any) => ({
+                        ...member,
+                        id: member.user?.id || member.id,
+                        name: member.user?.name || member.name,
+                        email: member.user?.email || member.email,
+                    }));
+                    setMembers(normalizedMembers);
                 }
             } catch (err) {
                 console.error('Error loading members:', err);
@@ -282,6 +298,22 @@ export default function ChatWindow() {
         }
     };
 
+    const handleTransferConversation = async (targetUserId: string, targetUserName: string) => {
+        if (!activeConversationId) return;
+        setActionError('');
+        setUpdatingConversation(true);
+        try {
+            await updateConversation(activeConversationId, { operatorId: targetUserId, status: 'OPEN' });
+            await sendNote(activeConversationId, `Передача диалога: назначен оператор ${targetUserName}.`);
+            setShowTransferModal(false);
+            await refreshConversationList();
+        } catch (err: any) {
+            setActionError(err?.response?.data?.error || 'Не удалось передать диалог оператору');
+        } finally {
+            setUpdatingConversation(false);
+        }
+    };
+
     if (!activeConversationId) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
@@ -340,6 +372,15 @@ export default function ChatWindow() {
                             Эскалация
                         </button>
                     )}
+                    {canTransferConversation && (
+                        <button
+                            onClick={() => setShowTransferModal(true)}
+                            disabled={updatingConversation}
+                            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 border-none cursor-pointer"
+                        >
+                            Передать
+                        </button>
+                    )}
                     {activeConversation?.status && (
                         <button
                             onClick={handleToggleStatus}
@@ -367,6 +408,49 @@ export default function ChatWindow() {
                     >
                         Скрыть
                     </button>
+                </div>
+            )}
+
+            {showTransferModal && (
+                <div className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center p-4" onClick={() => setShowTransferModal(false)}>
+                    <div className="w-full max-w-lg bg-surface border border-border rounded-xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-text-primary">Передать диалог оператору</h3>
+                            <button
+                                onClick={() => setShowTransferModal(false)}
+                                className="text-text-muted hover:text-text-primary border-none bg-transparent cursor-pointer"
+                            >
+                                Закрыть
+                            </button>
+                        </div>
+                        <div className="max-h-[340px] overflow-y-auto p-3 space-y-2">
+                            {assignmentCandidates.length === 0 ? (
+                                <div className="text-sm text-text-muted p-3">Нет доступных операторов для передачи</div>
+                            ) : assignmentCandidates.map(member => {
+                                const memberUserId = member.user?.id || member.id;
+                                const memberName = member.user?.name || member.name || 'Оператор';
+                                const memberEmail = member.user?.email || member.email || '';
+                                return (
+                                    <button
+                                        key={memberUserId}
+                                        onClick={() => handleTransferConversation(memberUserId, memberName)}
+                                        disabled={updatingConversation}
+                                        className="w-full text-left px-3 py-2.5 rounded-lg border border-border bg-surface-secondary hover:bg-surface-tertiary transition-colors disabled:opacity-50"
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <div className="text-sm font-medium text-text-primary">{memberName}</div>
+                                                <div className="text-xs text-text-muted">{memberEmail}</div>
+                                            </div>
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface border border-border text-text-secondary font-semibold">
+                                                {member.projectRole || 'OPERATOR'}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
             )}
 
