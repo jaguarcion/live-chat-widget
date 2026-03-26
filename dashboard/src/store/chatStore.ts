@@ -215,6 +215,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set({ activeConversationId: id, messages: [] });
         await get().fetchMessages(id);
 
+        // If user switched to another conversation before messages finished loading,
+        // skip read/join side effects for the stale conversation.
+        if (get().activeConversationId !== id) {
+            return;
+        }
+
         try {
             const { markConversationAsRead } = await import('../api');
             await markConversationAsRead(id);
@@ -236,6 +242,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     fetchMessages: async (conversationId: string) => {
         try {
             const { data } = await getMessages(conversationId);
+
+            // Ignore late responses from previous conversation requests.
+            if (get().activeConversationId !== conversationId) {
+                return;
+            }
+
             set({ messages: data });
         } catch (err) {
             console.error('Failed to fetch messages:', err);

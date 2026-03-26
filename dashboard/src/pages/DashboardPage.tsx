@@ -243,14 +243,18 @@ export default function DashboardPage({
             return;
         }
 
+        // URL should hydrate selected conversation only on first load/open.
+        // When user already switched chats manually, avoid forcing stale query param back.
+        if (activeConversationId) {
+            return;
+        }
+
         const existsInList = visibleConversations.some(conversation => conversation.id === queryConversationId);
         if (!existsInList) {
             return;
         }
 
-        if (activeConversationId !== queryConversationId) {
-            setActiveConversation(queryConversationId);
-        }
+        setActiveConversation(queryConversationId);
     }, [isProjectScoped, activeView, queryConversationId, visibleConversations, activeConversationId, setActiveConversation]);
 
     const resolvedInitialSettingsSection: SettingsSection = (() => {
