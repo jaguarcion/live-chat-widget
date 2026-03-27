@@ -3,7 +3,10 @@ import { prisma } from '../db';
 export type EventType =
     | 'CONVERSATION_CREATED'
     | 'MESSAGE_SENT'
+    | 'NOTE_SENT'
     | 'OPERATOR_ASSIGNED'
+    | 'OPERATOR_UNASSIGNED'
+    | 'CONVERSATION_CLASSIFIED'
     | 'CONVERSATION_CLOSED'
     | 'CONVERSATION_REOPENED'
     | 'VISITOR_CONNECTED'

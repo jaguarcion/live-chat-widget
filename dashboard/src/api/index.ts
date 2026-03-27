@@ -71,7 +71,10 @@ export const uploadFile = (file: File) => {
     formData.append('file', file);
     return api.post('/upload', formData);
 };
-export const updateConversation = (conversationId: string, data: { status?: string; operatorId?: string | null }) =>
+export const updateConversation = (
+    conversationId: string,
+    data: { status?: string; operatorId?: string | null; tags?: string[]; outcome?: string | null }
+) =>
     api.patch(`/conversations/${conversationId}`, data);
 export const markConversationAsRead = (conversationId: string) =>
     api.patch(`/conversations/${conversationId}/read`);

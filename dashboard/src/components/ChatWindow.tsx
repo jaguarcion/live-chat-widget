@@ -6,6 +6,16 @@ import { getAvatarSrc, getDiceBearUrl } from '../utils/avatarUtils';
 import { useAuthStore } from '../store/authStore';
 import QuickRepliesPanel from './QuickRepliesPanel';
 
+const OUTCOME_OPTIONS = [
+    { value: '', label: 'Без итога' },
+    { value: 'RESOLVED', label: 'Решено' },
+    { value: 'ESCALATED', label: 'Эскалация' },
+    { value: 'NO_RESPONSE', label: 'Нет ответа' },
+    { value: 'SPAM', label: 'Спам' },
+];
+
+const PRESET_TAGS = ['billing', 'support', 'bug', 'sales', 'urgent', 'vip'];
+
 export default function ChatWindow() {
     const MAX_TEXTAREA_ROWS = 5;
     const { user } = useAuthStore();
@@ -22,6 +32,9 @@ export default function ChatWindow() {
     const [updatingConversation, setUpdatingConversation] = useState(false);
     const [actionError, setActionError] = useState('');
     const [showTransferModal, setShowTransferModal] = useState(false);
+    const [tagsDraft, setTagsDraft] = useState<string[]>([]);
+    const [tagInput, setTagInput] = useState('');
+    const [outcomeDraft, setOutcomeDraft] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -47,6 +60,30 @@ export default function ChatWindow() {
 
     const formatMsgDate = (value: string | Date) =>
         new Date(value).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+
+    const parseConversationTags = (rawTags: unknown): string[] => {
+        if (Array.isArray(rawTags)) {
+            return rawTags
+                .map(tag => String(tag || '').trim().toLowerCase())
+                .filter(Boolean);
+        }
+        if (typeof rawTags === 'string' && rawTags.trim()) {
+            try {
+                const decoded = JSON.parse(rawTags);
+                if (Array.isArray(decoded)) {
+                    return decoded
+                        .map(tag => String(tag || '').trim().toLowerCase())
+                        .filter(Boolean);
+                }
+            } catch {
+                return rawTags
+                    .split(',')
+                    .map(tag => tag.trim().toLowerCase())
+                    .filter(Boolean);
+            }
+        }
+        return [];
+    };
 
     useEffect(() => {
         // Instant scroll when switching conversation
@@ -81,6 +118,13 @@ export default function ChatWindow() {
         // Smooth scroll for new messages (incoming or outgoing)
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    useEffect(() => {
+        const nextTags = parseConversationTags(activeConversation?.tags);
+        setTagsDraft(nextTags);
+        setOutcomeDraft(activeConversation?.outcome || '');
+        setTagInput('');
+    }, [activeConversationId, activeConversation?.tags, activeConversation?.outcome]);
 
     useEffect(() => {
         const textarea = textareaRef.current;
@@ -315,6 +359,34 @@ export default function ChatWindow() {
         }
     };
 
+    const addTagDraft = (rawTag: string) => {
+        const normalized = rawTag.trim().toLowerCase();
+        if (!normalized) return;
+        setTagsDraft(prev => (prev.includes(normalized) ? prev : [...prev, normalized].slice(0, 10)));
+        setTagInput('');
+    };
+
+    const removeTagDraft = (tag: string) => {
+        setTagsDraft(prev => prev.filter(existing => existing !== tag));
+    };
+
+    const handleSaveClassification = async () => {
+        if (!activeConversationId) return;
+        setActionError('');
+        setUpdatingConversation(true);
+        try {
+            await updateConversation(activeConversationId, {
+                tags: tagsDraft,
+                outcome: outcomeDraft || null,
+            });
+            await refreshConversationList();
+        } catch (err: any) {
+            setActionError(err?.response?.data?.error || 'Не удалось сохранить теги и итог диалога');
+        } finally {
+            setUpdatingConversation(false);
+        }
+    };
+
     if (!activeConversationId) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
@@ -397,6 +469,70 @@ export default function ChatWindow() {
                         }`}>
                         {activeConversation?.status === 'OPEN' ? 'Открыт' : 'Закрыт'}
                     </span>
+                </div>
+            </div>
+
+            <div className="px-4 md:px-6 py-2.5 border-b border-border bg-surface-secondary flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-text-secondary">Теги:</span>
+                {tagsDraft.length === 0 && (
+                    <span className="text-[11px] text-text-muted">не заданы</span>
+                )}
+                {tagsDraft.map(tag => (
+                    <span key={tag} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        #{tag}
+                        <button
+                            onClick={() => removeTagDraft(tag)}
+                            className="border-none bg-transparent text-primary cursor-pointer p-0 leading-none"
+                            aria-label={`Удалить тег ${tag}`}
+                        >
+                            ×
+                        </button>
+                    </span>
+                ))}
+
+                <input
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ',') {
+                            e.preventDefault();
+                            addTagDraft(tagInput);
+                        }
+                    }}
+                    placeholder="добавить тег"
+                    className="px-2 py-1 rounded-md border border-border bg-surface text-[11px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+                />
+
+                <div className="flex items-center gap-1">
+                    {PRESET_TAGS.map(tag => (
+                        <button
+                            key={tag}
+                            onClick={() => addTagDraft(tag)}
+                            className="px-1.5 py-0.5 rounded-md text-[10px] bg-surface border border-border text-text-secondary hover:text-text-primary cursor-pointer"
+                        >
+                            #{tag}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="ml-auto flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-text-secondary">Итог:</span>
+                    <select
+                        value={outcomeDraft}
+                        onChange={(e) => setOutcomeDraft(e.target.value)}
+                        className="px-2 py-1 rounded-md border border-border bg-surface text-[11px] text-text-primary"
+                    >
+                        {OUTCOME_OPTIONS.map(option => (
+                            <option key={option.value || 'none'} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                    <button
+                        onClick={handleSaveClassification}
+                        disabled={updatingConversation}
+                        className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-primary text-white hover:bg-primary-hover disabled:opacity-50 border-none cursor-pointer"
+                    >
+                        Сохранить
+                    </button>
                 </div>
             </div>
 

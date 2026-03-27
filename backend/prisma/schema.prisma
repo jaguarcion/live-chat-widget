@@ -121,6 +121,8 @@ model Conversation {
   operatorId String?
   status     String    @default("OPEN")
   isPinned   Boolean   @default(false)
+  tags       String?   @db.Text // JSON array of short tags
+  outcome    String?   // e.g. RESOLVED, ESCALATED, NO_RESPONSE
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   operator   User?     @relation("AssignedOperator", fields: [operatorId], references: [id])

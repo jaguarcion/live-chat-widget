@@ -4,7 +4,7 @@ import { isIP } from 'net';
 import { prisma } from '../db';
 import { decryptSecret } from './secretCrypto';
 
-export type WebhookEvent = 'new_message' | 'new_conversation' | 'conversation_closed' | 'operator_assigned';
+export type WebhookEvent = 'new_message' | 'new_conversation' | 'conversation_closed' | 'operator_assigned' | 'operator_unassigned';
 
 const isPrivateIpv4 = (ip: string): boolean => {
     const parts = ip.split('.').map(Number);

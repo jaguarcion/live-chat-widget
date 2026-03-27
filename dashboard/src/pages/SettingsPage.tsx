@@ -80,6 +80,8 @@ export default function SettingsPage({
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [needsBaselineSync, setNeedsBaselineSync] = useState(false);
     const [isAlwaysOnline, setIsAlwaysOnline] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [autoActions, setAutoActions] = useState<AutoActionRule[]>([]);
@@ -141,6 +143,7 @@ export default function SettingsPage({
     const [fileUpload, setFileUpload] = useState(true);
     const [messengerMode, setMessengerMode] = useState(true);
     const [typingWatch, setTypingWatch] = useState(true);
+    const savedSnapshotRef = useRef('');
 
     const autoActionFunnel = useMemo(() => {
         const map = new Map<string, { ruleName: string; triggered: number; replied: number }>();
@@ -171,13 +174,31 @@ export default function SettingsPage({
         }
     }, [initialProjectId]);
     useEffect(() => {
-        if (selectedProjectId) {
-            loadSettings(selectedProjectId);
-            loadWebhooks(selectedProjectId);
-            loadMembers(selectedProjectId);
-            loadAutoActions(selectedProjectId);
-            loadAutoActionTriggers(selectedProjectId);
-        }
+        if (!selectedProjectId) return;
+
+        let cancelled = false;
+        const loadProjectData = async () => {
+            setLoading(true);
+            await Promise.all([
+                loadSettings(selectedProjectId),
+                loadWebhooks(selectedProjectId),
+                loadMembers(selectedProjectId),
+                loadAutoActions(selectedProjectId),
+                loadAutoActionTriggers(selectedProjectId),
+            ]);
+
+            if (!cancelled) {
+                savedSnapshotRef.current = '';
+                setHasUnsavedChanges(false);
+                setNeedsBaselineSync(true);
+                setLoading(false);
+            }
+        };
+
+        loadProjectData();
+        return () => {
+            cancelled = true;
+        };
     }, [selectedProjectId]);
 
     const loadProjects = async () => {
@@ -356,12 +377,102 @@ export default function SettingsPage({
             await updateAutoActions(selectedProjectId, { rules: autoActions });
             await loadAutoActionTriggers(selectedProjectId);
             setSaved(true);
+            setNeedsBaselineSync(true);
             setTimeout(() => setSaved(false), 2500);
         } catch (err) {
             console.error('Failed to save:', err);
         } finally {
             setSaving(false);
         }
+    };
+
+    const currentSnapshot = useMemo(() => JSON.stringify({
+        timezone,
+        offlineMessage,
+        isOfflineForm,
+        isAlwaysOnline,
+        hours,
+        chatColor,
+        buttonPosition,
+        buttonStyle,
+        coloredHeader,
+        onlineTitle,
+        offlineTitle,
+        welcomeText,
+        soundEnabled,
+        showMobileButton,
+        showLogo,
+        fileUpload,
+        messengerMode,
+        typingWatch,
+        smtpHost,
+        smtpPort,
+        smtpUser,
+        smtpPassword,
+        smtpPasswordDirty,
+        smtpFrom,
+        emailNotify,
+        webhookEnabled,
+        prechatFields,
+        autoActions,
+    }), [
+        timezone,
+        offlineMessage,
+        isOfflineForm,
+        isAlwaysOnline,
+        hours,
+        chatColor,
+        buttonPosition,
+        buttonStyle,
+        coloredHeader,
+        onlineTitle,
+        offlineTitle,
+        welcomeText,
+        soundEnabled,
+        showMobileButton,
+        showLogo,
+        fileUpload,
+        messengerMode,
+        typingWatch,
+        smtpHost,
+        smtpPort,
+        smtpUser,
+        smtpPassword,
+        smtpPasswordDirty,
+        smtpFrom,
+        emailNotify,
+        webhookEnabled,
+        prechatFields,
+        autoActions,
+    ]);
+
+    useEffect(() => {
+        if (!selectedProjectId || loading) return;
+
+        if (needsBaselineSync || !savedSnapshotRef.current) {
+            savedSnapshotRef.current = currentSnapshot;
+            setHasUnsavedChanges(false);
+            if (needsBaselineSync) setNeedsBaselineSync(false);
+            return;
+        }
+
+        setHasUnsavedChanges(currentSnapshot !== savedSnapshotRef.current);
+    }, [currentSnapshot, selectedProjectId, loading, needsBaselineSync]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            if (!hasUnsavedChanges) return;
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges]);
+
+    const confirmDiscardChanges = (): boolean => {
+        if (!hasUnsavedChanges) return true;
+        return window.confirm('Есть несохраненные изменения. Перейти без сохранения?');
     };
 
     const updateHour = (day: number, field: keyof BusinessHour, value: any) => {
@@ -397,7 +508,12 @@ export default function SettingsPage({
                         <div className="flex items-center gap-2">
                             <select
                                 value={selectedProjectId}
-                                onChange={e => setSelectedProjectId(e.target.value)}
+                                onChange={e => {
+                                    const nextProjectId = e.target.value;
+                                    if (nextProjectId === selectedProjectId) return;
+                                    if (!confirmDiscardChanges()) return;
+                                    setSelectedProjectId(nextProjectId);
+                                }}
                                 disabled={projectLocked}
                                 className="flex-1 px-3 py-2 rounded-lg bg-surface-tertiary border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                             >
@@ -428,6 +544,9 @@ export default function SettingsPage({
                             <button
                                 key={item.key}
                                 onClick={() => {
+                                    if (item.key !== activeSection && !confirmDiscardChanges()) {
+                                        return;
+                                    }
                                     setActiveSection(item.key);
                                     onSectionChange?.(item.key);
                                 }}
@@ -444,6 +563,11 @@ export default function SettingsPage({
 
                     {/* Save button in sidebar */}
                     <div className="p-3 border-t border-border">
+                        {hasUnsavedChanges && (
+                            <div className="mb-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                                Есть несохраненные изменения
+                            </div>
+                        )}
                         <button
                             onClick={handleSave}
                             disabled={saving}

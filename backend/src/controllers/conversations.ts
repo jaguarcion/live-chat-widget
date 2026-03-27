@@ -231,7 +231,7 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
         if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
         const { id } = req.params;
-        const { status, operatorId } = req.body;
+        const { status, operatorId, tags, outcome } = req.body;
 
         const existingConversation = await prisma.conversation.findUnique({
             where: { id },
@@ -260,6 +260,24 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
             data.operatorId = operatorId || null;
         }
 
+        if (Object.prototype.hasOwnProperty.call(req.body, 'tags')) {
+            const normalizedTags = Array.isArray(tags)
+                ? tags
+                    .map((tag: unknown) => String(tag || '').trim().toLowerCase())
+                    .filter((tag: string) => tag.length > 0)
+                    .slice(0, 10)
+                : [];
+
+            data.tags = normalizedTags.length > 0
+                ? JSON.stringify(Array.from(new Set(normalizedTags)))
+                : null;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(req.body, 'outcome')) {
+            const normalizedOutcome = String(outcome || '').trim().toUpperCase();
+            data.outcome = normalizedOutcome || null;
+        }
+
         const conversation = await prisma.conversation.update({
             where: { id },
             data,
@@ -269,6 +287,7 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
                 project: { select: { id: true, name: true } }
             }
         });
+        const conversationAny = conversation as any;
 
         // Log events for status changes and operator assignment
         if (status === 'CLOSED') {
@@ -283,6 +302,31 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
         if (operatorChanged && operatorId) {
             logEvent(conversation.projectId, 'OPERATOR_ASSIGNED', { conversationId: id, operatorId });
             triggerWebhook(conversation.projectId, 'operator_assigned', { conversationId: id, operatorId });
+
+            const ownershipSystemText = existingConversation.operatorId
+                ? `Диалог передан оператору ${conversation.operator?.name || 'оператору'}.`
+                : `Диалог назначен оператору ${conversation.operator?.name || 'оператору'}.`;
+
+            const ownershipSystemMessage = await prisma.message.create({
+                data: {
+                    conversationId: id,
+                    sender: 'OPERATOR',
+                    senderId: userId,
+                    type: 'SYSTEM',
+                    text: ownershipSystemText,
+                },
+                include: {
+                    user: { select: { id: true, name: true, avatarUrl: true, title: true } }
+                }
+            });
+
+            try {
+                const io = getIO();
+                io.to(`conversation_${id}`).emit('server_message', ownershipSystemMessage);
+                io.to('operators').emit('new_message', ownershipSystemMessage);
+            } catch (e) {
+                console.error('Socket broadcast error (ownership system):', e);
+            }
 
             // Create service message "OPERATOR_JOIN"
             const joinMessage = await prisma.message.create({
@@ -314,6 +358,51 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
                 conversationId: id,
                 previousOperatorId: existingConversation.operatorId,
             });
+
+            const previousOperatorName = existingConversation.operator?.name || 'оператора';
+            const unassignSystemMessage = await prisma.message.create({
+                data: {
+                    conversationId: id,
+                    sender: 'OPERATOR',
+                    senderId: userId,
+                    type: 'SYSTEM',
+                    text: `Диалог снят с ${previousOperatorName} и возвращен в общую очередь.`,
+                },
+                include: {
+                    user: { select: { id: true, name: true, avatarUrl: true, title: true } }
+                }
+            });
+
+            try {
+                const io = getIO();
+                io.to(`conversation_${id}`).emit('server_message', unassignSystemMessage);
+                io.to('operators').emit('new_message', unassignSystemMessage);
+            } catch (e) {
+                console.error('Socket broadcast error (unassign system):', e);
+            }
+        }
+
+        const classificationChanged =
+            Object.prototype.hasOwnProperty.call(req.body, 'tags')
+            || Object.prototype.hasOwnProperty.call(req.body, 'outcome');
+
+        if (classificationChanged) {
+            let parsedTags: string[] = [];
+            if (conversationAny.tags) {
+                try {
+                    const decoded = JSON.parse(conversationAny.tags);
+                    parsedTags = Array.isArray(decoded) ? decoded : [];
+                } catch {
+                    parsedTags = [];
+                }
+            }
+
+            logEvent(conversation.projectId, 'CONVERSATION_CLASSIFIED', {
+                conversationId: id,
+                outcome: conversationAny.outcome || null,
+                tags: parsedTags,
+                actorId: userId,
+            });
         }
 
         try {
@@ -322,6 +411,8 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
                 conversationId: id,
                 operatorId: conversation.operatorId,
                 status: conversation.status,
+                tags: conversationAny.tags,
+                outcome: conversationAny.outcome,
             });
         } catch (e) {
             console.error('Socket broadcast error (conversation update):', e);

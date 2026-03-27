@@ -20,6 +20,18 @@ function timeAgo(dateStr: string): string {
 function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conversation: Conversation; isActive: boolean; isOnline: boolean; isTyping: boolean }) {
     const { setActiveConversation } = useChatStore();
     const lastMessage = conversation.messages[0];
+    const tags = (() => {
+        if (Array.isArray(conversation.tags)) return conversation.tags;
+        if (typeof conversation.tags === 'string' && conversation.tags.trim()) {
+            try {
+                const decoded = JSON.parse(conversation.tags);
+                return Array.isArray(decoded) ? decoded : [];
+            } catch {
+                return conversation.tags.split(',').map(tag => tag.trim()).filter(Boolean);
+            }
+        }
+        return [] as string[];
+    })();
 
     return (
         <button
@@ -72,6 +84,16 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
                                 {conversation.unreadCount}
                             </span>
                         )}
+                        {conversation.outcome && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-semibold leading-none">
+                                {conversation.outcome}
+                            </span>
+                        )}
+                        {tags.slice(0, 2).map(tag => (
+                            <span key={`${conversation.id}_${tag}`} className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface border border-border text-text-secondary leading-none">
+                                #{tag}
+                            </span>
+                        ))}
                         <span className="text-[11px] font-normal text-text-muted truncate leading-none">
                             {conversation.status === 'OPEN' ? (
                                 <span className="text-success">Открыт</span>
