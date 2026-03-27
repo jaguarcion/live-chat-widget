@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../db';
 import { AuthRequest } from '../middlewares/auth';
 import { hasProjectAccess } from '../services/accessControl';
+import { canManageProjectMembers } from '../services/policy';
 
 const ALLOWED_PROJECT_ROLES = new Set(['OWNER', 'ADMIN', 'OPERATOR']);
 
@@ -14,8 +15,8 @@ export const addMember = async (req: AuthRequest, res: Response): Promise<void> 
         const { id: projectId } = req.params;
         const { email, projectRole = 'OPERATOR' } = req.body;
 
-        const canAccessProject = await hasProjectAccess(actorId, projectId);
-        if (!canAccessProject) { res.status(403).json({ error: 'Forbidden' }); return; }
+        const canManage = await canManageProjectMembers({ userId: actorId, role: req.user?.role || '' }, projectId);
+        if (!canManage) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         if (!ALLOWED_PROJECT_ROLES.has(projectRole)) {
             res.status(400).json({ error: 'Invalid projectRole' });
@@ -94,8 +95,8 @@ export const updateMemberRole = async (req: AuthRequest, res: Response): Promise
         const { id: projectId, userId } = req.params;
         const { projectRole, name, title, avatarUrl, showInGreeting } = req.body;
 
-        const canAccessProject = await hasProjectAccess(actorId, projectId);
-        if (!canAccessProject) { res.status(403).json({ error: 'Forbidden' }); return; }
+        const canManage = await canManageProjectMembers({ userId: actorId, role: req.user?.role || '' }, projectId);
+        if (!canManage) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         const existingMember = await prisma.projectMember.findUnique({
             where: { userId_projectId: { userId, projectId } },
@@ -159,8 +160,8 @@ export const removeMember = async (req: AuthRequest, res: Response): Promise<voi
 
         const { id: projectId, userId } = req.params;
 
-        const canAccessProject = await hasProjectAccess(actorId, projectId);
-        if (!canAccessProject) { res.status(403).json({ error: 'Forbidden' }); return; }
+        const canManage = await canManageProjectMembers({ userId: actorId, role: req.user?.role || '' }, projectId);
+        if (!canManage) { res.status(403).json({ error: 'Forbidden' }); return; }
 
         const targetMember = await prisma.projectMember.findUnique({
             where: { userId_projectId: { userId, projectId } },

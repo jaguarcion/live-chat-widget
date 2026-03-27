@@ -231,7 +231,7 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
         if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
         const { id } = req.params;
-        const { status, operatorId, tags, outcome } = req.body;
+        const { status, operatorId } = req.body;
 
         const existingConversation = await prisma.conversation.findUnique({
             where: { id },
@@ -260,24 +260,6 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
             data.operatorId = operatorId || null;
         }
 
-        if (Object.prototype.hasOwnProperty.call(req.body, 'tags')) {
-            const normalizedTags = Array.isArray(tags)
-                ? tags
-                    .map((tag: unknown) => String(tag || '').trim().toLowerCase())
-                    .filter((tag: string) => tag.length > 0)
-                    .slice(0, 10)
-                : [];
-
-            data.tags = normalizedTags.length > 0
-                ? JSON.stringify(Array.from(new Set(normalizedTags)))
-                : null;
-        }
-
-        if (Object.prototype.hasOwnProperty.call(req.body, 'outcome')) {
-            const normalizedOutcome = String(outcome || '').trim().toUpperCase();
-            data.outcome = normalizedOutcome || null;
-        }
-
         const conversation = await prisma.conversation.update({
             where: { id },
             data,
@@ -287,7 +269,6 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
                 project: { select: { id: true, name: true } }
             }
         });
-        const conversationAny = conversation as any;
 
         // Log events for status changes and operator assignment
         if (status === 'CLOSED') {
@@ -382,37 +363,12 @@ export const updateConversation = async (req: AuthRequest, res: Response): Promi
             }
         }
 
-        const classificationChanged =
-            Object.prototype.hasOwnProperty.call(req.body, 'tags')
-            || Object.prototype.hasOwnProperty.call(req.body, 'outcome');
-
-        if (classificationChanged) {
-            let parsedTags: string[] = [];
-            if (conversationAny.tags) {
-                try {
-                    const decoded = JSON.parse(conversationAny.tags);
-                    parsedTags = Array.isArray(decoded) ? decoded : [];
-                } catch {
-                    parsedTags = [];
-                }
-            }
-
-            logEvent(conversation.projectId, 'CONVERSATION_CLASSIFIED', {
-                conversationId: id,
-                outcome: conversationAny.outcome || null,
-                tags: parsedTags,
-                actorId: userId,
-            });
-        }
-
         try {
             const io = getIO();
             io.to(`project_${conversation.projectId}`).emit('conversation_updated', {
                 conversationId: id,
                 operatorId: conversation.operatorId,
                 status: conversation.status,
-                tags: conversationAny.tags,
-                outcome: conversationAny.outcome,
             });
         } catch (e) {
             console.error('Socket broadcast error (conversation update):', e);

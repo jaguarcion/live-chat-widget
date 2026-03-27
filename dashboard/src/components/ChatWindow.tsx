@@ -6,16 +6,6 @@ import { getAvatarSrc, getDiceBearUrl } from '../utils/avatarUtils';
 import { useAuthStore } from '../store/authStore';
 import QuickRepliesPanel from './QuickRepliesPanel';
 
-const OUTCOME_OPTIONS = [
-    { value: '', label: 'Без итога' },
-    { value: 'RESOLVED', label: 'Решено' },
-    { value: 'ESCALATED', label: 'Эскалация' },
-    { value: 'NO_RESPONSE', label: 'Нет ответа' },
-    { value: 'SPAM', label: 'Спам' },
-];
-
-const PRESET_TAGS = ['billing', 'support', 'bug', 'sales', 'urgent', 'vip'];
-
 export default function ChatWindow() {
     const MAX_TEXTAREA_ROWS = 5;
     const { user } = useAuthStore();
@@ -31,10 +21,6 @@ export default function ChatWindow() {
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [updatingConversation, setUpdatingConversation] = useState(false);
     const [actionError, setActionError] = useState('');
-    const [showTransferModal, setShowTransferModal] = useState(false);
-    const [tagsDraft, setTagsDraft] = useState<string[]>([]);
-    const [tagInput, setTagInput] = useState('');
-    const [outcomeDraft, setOutcomeDraft] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -42,48 +28,13 @@ export default function ChatWindow() {
     const activeConversation = conversations.find(c => c.id === activeConversationId);
     const canSendMessage = !!activeConversationId && activeConversation?.status === 'OPEN';
     const hasText = text.trim().length > 0;
-    const isAssignedToMe = !!(user?.id && activeConversation?.operatorId === user.id);
     const canClaimConversation = Boolean(activeConversationId && user?.id && !activeConversation?.operatorId && activeConversation?.status === 'OPEN');
-    const canEscalateConversation = Boolean(activeConversationId && isAssignedToMe && activeConversation?.status === 'OPEN');
-    const canTransferConversation = Boolean(
-        activeConversationId
-        && activeConversation?.status === 'OPEN'
-        && (isAssignedToMe || user?.role === 'SUPER_ADMIN')
-    );
-    const assignmentCandidates = members.filter(member => {
-        const memberUserId = member.user?.id || member.id;
-        return Boolean(memberUserId && memberUserId !== activeConversation?.operatorId);
-    });
 
     const formatMsgTime = (value: string | Date) =>
         new Date(value).toLocaleTimeString('ru-RU', { hour: 'numeric', minute: '2-digit' });
 
     const formatMsgDate = (value: string | Date) =>
         new Date(value).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-
-    const parseConversationTags = (rawTags: unknown): string[] => {
-        if (Array.isArray(rawTags)) {
-            return rawTags
-                .map(tag => String(tag || '').trim().toLowerCase())
-                .filter(Boolean);
-        }
-        if (typeof rawTags === 'string' && rawTags.trim()) {
-            try {
-                const decoded = JSON.parse(rawTags);
-                if (Array.isArray(decoded)) {
-                    return decoded
-                        .map(tag => String(tag || '').trim().toLowerCase())
-                        .filter(Boolean);
-                }
-            } catch {
-                return rawTags
-                    .split(',')
-                    .map(tag => tag.trim().toLowerCase())
-                    .filter(Boolean);
-            }
-        }
-        return [];
-    };
 
     useEffect(() => {
         // Instant scroll when switching conversation
@@ -118,13 +69,6 @@ export default function ChatWindow() {
         // Smooth scroll for new messages (incoming or outgoing)
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-
-    useEffect(() => {
-        const nextTags = parseConversationTags(activeConversation?.tags);
-        setTagsDraft(nextTags);
-        setOutcomeDraft(activeConversation?.outcome || '');
-        setTagInput('');
-    }, [activeConversationId, activeConversation?.tags, activeConversation?.outcome]);
 
     useEffect(() => {
         const textarea = textareaRef.current;
@@ -313,79 +257,6 @@ export default function ChatWindow() {
         }
     };
 
-    const handleEscalateConversation = async () => {
-        if (!activeConversationId || !activeConversation) return;
-        setActionError('');
-        setUpdatingConversation(true);
-        try {
-            await updateConversation(activeConversationId, { operatorId: null, status: 'OPEN' });
-            await sendNote(activeConversationId, 'Эскалация: диалог передан в общую очередь для старшего оператора.');
-            await refreshConversationList();
-        } catch (err: any) {
-            setActionError(err?.response?.data?.error || 'Не удалось выполнить эскалацию');
-        } finally {
-            setUpdatingConversation(false);
-        }
-    };
-
-    const handleToggleStatus = async () => {
-        if (!activeConversationId || !activeConversation) return;
-        setActionError('');
-        setUpdatingConversation(true);
-        try {
-            const nextStatus = activeConversation.status === 'OPEN' ? 'CLOSED' : 'OPEN';
-            await updateConversation(activeConversationId, { status: nextStatus });
-            await refreshConversationList();
-        } catch (err: any) {
-            setActionError(err?.response?.data?.error || 'Не удалось изменить статус диалога');
-        } finally {
-            setUpdatingConversation(false);
-        }
-    };
-
-    const handleTransferConversation = async (targetUserId: string, targetUserName: string) => {
-        if (!activeConversationId) return;
-        setActionError('');
-        setUpdatingConversation(true);
-        try {
-            await updateConversation(activeConversationId, { operatorId: targetUserId, status: 'OPEN' });
-            await sendNote(activeConversationId, `Передача диалога: назначен оператор ${targetUserName}.`);
-            setShowTransferModal(false);
-            await refreshConversationList();
-        } catch (err: any) {
-            setActionError(err?.response?.data?.error || 'Не удалось передать диалог оператору');
-        } finally {
-            setUpdatingConversation(false);
-        }
-    };
-
-    const addTagDraft = (rawTag: string) => {
-        const normalized = rawTag.trim().toLowerCase();
-        if (!normalized) return;
-        setTagsDraft(prev => (prev.includes(normalized) ? prev : [...prev, normalized].slice(0, 10)));
-        setTagInput('');
-    };
-
-    const removeTagDraft = (tag: string) => {
-        setTagsDraft(prev => prev.filter(existing => existing !== tag));
-    };
-
-    const handleSaveClassification = async () => {
-        if (!activeConversationId) return;
-        setActionError('');
-        setUpdatingConversation(true);
-        try {
-            await updateConversation(activeConversationId, {
-                tags: tagsDraft,
-                outcome: outcomeDraft || null,
-            });
-            await refreshConversationList();
-        } catch (err: any) {
-            setActionError(err?.response?.data?.error || 'Не удалось сохранить теги и итог диалога');
-        } finally {
-            setUpdatingConversation(false);
-        }
-    };
 
     if (!activeConversationId) {
         return (
@@ -436,103 +307,12 @@ export default function ChatWindow() {
                             Взять
                         </button>
                     )}
-                    {canEscalateConversation && (
-                        <button
-                            onClick={handleEscalateConversation}
-                            disabled={updatingConversation}
-                            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50 border-none cursor-pointer"
-                        >
-                            Эскалация
-                        </button>
-                    )}
-                    {canTransferConversation && (
-                        <button
-                            onClick={() => setShowTransferModal(true)}
-                            disabled={updatingConversation}
-                            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 border-none cursor-pointer"
-                        >
-                            Передать
-                        </button>
-                    )}
-                    {activeConversation?.status && (
-                        <button
-                            onClick={handleToggleStatus}
-                            disabled={updatingConversation}
-                            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-surface-secondary text-text-secondary hover:bg-surface-tertiary disabled:opacity-50 border border-border cursor-pointer"
-                        >
-                            {activeConversation.status === 'OPEN' ? 'Закрыть' : 'Открыть'}
-                        </button>
-                    )}
                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${activeConversation?.status === 'OPEN'
                         ? 'bg-success/15 text-success'
                         : 'bg-text-muted/15 text-text-muted'
                         }`}>
                         {activeConversation?.status === 'OPEN' ? 'Открыт' : 'Закрыт'}
                     </span>
-                </div>
-            </div>
-
-            <div className="px-4 md:px-6 py-2.5 border-b border-border bg-surface-secondary flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold text-text-secondary">Теги:</span>
-                {tagsDraft.length === 0 && (
-                    <span className="text-[11px] text-text-muted">не заданы</span>
-                )}
-                {tagsDraft.map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                        #{tag}
-                        <button
-                            onClick={() => removeTagDraft(tag)}
-                            className="border-none bg-transparent text-primary cursor-pointer p-0 leading-none"
-                            aria-label={`Удалить тег ${tag}`}
-                        >
-                            ×
-                        </button>
-                    </span>
-                ))}
-
-                <input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ',') {
-                            e.preventDefault();
-                            addTagDraft(tagInput);
-                        }
-                    }}
-                    placeholder="добавить тег"
-                    className="px-2 py-1 rounded-md border border-border bg-surface text-[11px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
-                />
-
-                <div className="flex items-center gap-1">
-                    {PRESET_TAGS.map(tag => (
-                        <button
-                            key={tag}
-                            onClick={() => addTagDraft(tag)}
-                            className="px-1.5 py-0.5 rounded-md text-[10px] bg-surface border border-border text-text-secondary hover:text-text-primary cursor-pointer"
-                        >
-                            #{tag}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="ml-auto flex items-center gap-2">
-                    <span className="text-[11px] font-semibold text-text-secondary">Итог:</span>
-                    <select
-                        value={outcomeDraft}
-                        onChange={(e) => setOutcomeDraft(e.target.value)}
-                        className="px-2 py-1 rounded-md border border-border bg-surface text-[11px] text-text-primary"
-                    >
-                        {OUTCOME_OPTIONS.map(option => (
-                            <option key={option.value || 'none'} value={option.value}>{option.label}</option>
-                        ))}
-                    </select>
-                    <button
-                        onClick={handleSaveClassification}
-                        disabled={updatingConversation}
-                        className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-primary text-white hover:bg-primary-hover disabled:opacity-50 border-none cursor-pointer"
-                    >
-                        Сохранить
-                    </button>
                 </div>
             </div>
 
@@ -545,49 +325,6 @@ export default function ChatWindow() {
                     >
                         Скрыть
                     </button>
-                </div>
-            )}
-
-            {showTransferModal && (
-                <div className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center p-4" onClick={() => setShowTransferModal(false)}>
-                    <div className="w-full max-w-lg bg-surface border border-border rounded-xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-text-primary">Передать диалог оператору</h3>
-                            <button
-                                onClick={() => setShowTransferModal(false)}
-                                className="text-text-muted hover:text-text-primary border-none bg-transparent cursor-pointer"
-                            >
-                                Закрыть
-                            </button>
-                        </div>
-                        <div className="max-h-[340px] overflow-y-auto p-3 space-y-2">
-                            {assignmentCandidates.length === 0 ? (
-                                <div className="text-sm text-text-muted p-3">Нет доступных операторов для передачи</div>
-                            ) : assignmentCandidates.map(member => {
-                                const memberUserId = member.user?.id || member.id;
-                                const memberName = member.user?.name || member.name || 'Оператор';
-                                const memberEmail = member.user?.email || member.email || '';
-                                return (
-                                    <button
-                                        key={memberUserId}
-                                        onClick={() => handleTransferConversation(memberUserId, memberName)}
-                                        disabled={updatingConversation}
-                                        className="w-full text-left px-3 py-2.5 rounded-lg border border-border bg-surface-secondary hover:bg-surface-tertiary transition-colors disabled:opacity-50"
-                                    >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div>
-                                                <div className="text-sm font-medium text-text-primary">{memberName}</div>
-                                                <div className="text-xs text-text-muted">{memberEmail}</div>
-                                            </div>
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface border border-border text-text-secondary font-semibold">
-                                                {member.projectRole || 'OPERATOR'}
-                                            </span>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
                 </div>
             )}
 

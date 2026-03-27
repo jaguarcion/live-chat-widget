@@ -73,7 +73,7 @@ export const uploadFile = (file: File) => {
 };
 export const updateConversation = (
     conversationId: string,
-    data: { status?: string; operatorId?: string | null; tags?: string[]; outcome?: string | null }
+    data: { status?: string; operatorId?: string | null }
 ) =>
     api.patch(`/conversations/${conversationId}`, data);
 export const markConversationAsRead = (conversationId: string) =>

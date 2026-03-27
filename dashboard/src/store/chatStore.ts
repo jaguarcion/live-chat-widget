@@ -41,8 +41,6 @@ export interface Conversation {
     operatorId: string | null;
     status: string;
     isPinned?: boolean;
-    tags?: string | string[] | null;
-    outcome?: string | null;
     createdAt: string;
     updatedAt: string;
     visitor: Visitor;
