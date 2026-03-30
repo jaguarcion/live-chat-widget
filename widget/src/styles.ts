@@ -186,8 +186,13 @@ export const widgetStyles = `
     font-size: 24px;
     cursor: pointer;
     line-height: 1;
-    padding: 4px;
-    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
   }
 
@@ -329,7 +334,7 @@ export const widgetStyles = `
   }
 
   .livechat-input-area {
-    padding: 12px 14px;
+    padding: 0;
     background: white;
     border-top: 1px solid var(--border-color);
     flex-shrink: 0;
@@ -340,8 +345,8 @@ export const widgetStyles = `
     align-items: flex-end;
     gap: 8px;
     background: var(--bg-light);
-    border-radius: 20px;
-    padding: 8px 14px;
+    border-radius: 0;
+    padding: 10px 14px;
     width: 100%;
     transition: box-shadow 180ms ease, background-color 180ms ease;
   }
@@ -589,12 +594,13 @@ export const widgetStyles = `
   .livechat-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
 
   .livechat-typing-indicator {
-    padding: 8px 16px;
+    display: none;
+    padding: 0 16px;
     font-size: 12px;
     color: var(--text-muted);
     font-style: italic;
     background: white;
-    border-top: 1px solid var(--border-color);
+    border-top: 0;
     opacity: 0;
     transform: translateY(6px);
     pointer-events: none;
@@ -602,6 +608,9 @@ export const widgetStyles = `
   }
 
   .livechat-typing-indicator.show {
+    display: block;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border-color);
     opacity: 1;
     transform: translateY(0);
   }
