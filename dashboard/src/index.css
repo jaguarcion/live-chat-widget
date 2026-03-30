@@ -45,6 +45,7 @@
     background-color: var(--color-surface);
     color: var(--color-text-primary);
     min-height: 100vh;
+    overflow: hidden;
   }
 
   #root {
@@ -56,6 +57,60 @@
   #root > * {
     flex: 1 1 auto;
     min-width: 0;
+  }
+}
+
+@layer utilities {
+  .dashboard-scroll-stable {
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+  }
+
+  .ui-scroll-smooth {
+    scroll-behavior: smooth;
+  }
+
+  .ui-fade-slide-in {
+    animation: ui-fade-slide-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .ui-panel-in {
+    animation: ui-panel-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+@keyframes ui-fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

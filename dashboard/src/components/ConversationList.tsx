@@ -24,7 +24,7 @@ function ConversationItem({ conversation, isActive, isOnline, isTyping }: { conv
     return (
         <button
             onClick={() => setActiveConversation(conversation.id)}
-            className={`w-full text-left px-3 py-3 border-b border-border transition-all cursor-pointer border-x-0 border-t-0 hover:bg-surface-secondary ${isActive
+            className={`w-full h-[92px] text-left px-3 py-3 border-b border-border transition-[background-color,border-color,transform] duration-200 cursor-pointer border-x-0 border-t-0 hover:bg-surface-secondary hover:translate-x-0.5 ${isActive
                 ? 'bg-primary/5 !border-l-[3px] !border-l-primary'
                 : 'bg-transparent'
                 }`}
@@ -237,7 +237,7 @@ export default function ConversationList({ conversations: inputConversations }: 
                     setScrollTop(target.scrollTop);
                     setViewportHeight(target.clientHeight);
                 }}
-                className="flex-1 overflow-y-auto"
+                className="flex-1 overflow-y-auto ui-scroll-smooth dashboard-scroll-stable"
             >
                 {visibleConversations.length === 0 ? (
                     <div className="flex h-full items-center justify-center p-6 text-center text-sm text-text-muted">

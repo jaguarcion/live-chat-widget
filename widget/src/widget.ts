@@ -311,6 +311,7 @@ export class LiveChatWidget {
     private buildToggleButton() {
         this.toggleBtn = document.createElement('button');
         this.toggleBtn.className = 'livechat-toggle';
+        this.toggleBtn.setAttribute('aria-expanded', 'false');
         this.toggleBtn.innerHTML = `
       <svg viewBox="0 0 24 24">
         <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.2L4 17.2V4h16v12z"/>
@@ -356,7 +357,7 @@ export class LiveChatWidget {
           </button>
         </div>
       </div>
-      <div class="livechat-typing-indicator" style="display:none">Оператор печатает...</div>
+            <div class="livechat-typing-indicator">Оператор печатает...</div>
       <div class="livechat-powered">Powered by LiveChat</div>
     `;
 
@@ -453,7 +454,7 @@ export class LiveChatWidget {
                 width: 100%;
                 height: 100%;
                 background: rgba(0, 0, 0, 0.9);
-                z-index: 99999999;
+                z-index: calc(var(--livechat-z-index, 2140) + 20);
                 display: none;
                 align-items: center;
                 justify-content: center;
@@ -511,6 +512,7 @@ export class LiveChatWidget {
         this.isOpen = !this.isOpen;
         this.windowEl.classList.toggle('open', this.isOpen);
         this.toggleBtn.classList.toggle('open', this.isOpen);
+        this.toggleBtn.setAttribute('aria-expanded', String(this.isOpen));
 
         this.updateToggleContent();
 
@@ -609,10 +611,7 @@ export class LiveChatWidget {
 
             // Normal message
             const wrapper = document.createElement('div');
-            wrapper.style.display = 'flex';
-            wrapper.style.flexDirection = 'column';
-            wrapper.style.width = '100%';
-            wrapper.style.position = 'relative';
+            wrapper.className = 'livechat-msg-row';
 
             if (msg.sender === 'OPERATOR') {
                 const authorEl = document.createElement('div');
@@ -836,7 +835,10 @@ export class LiveChatWidget {
 
     private scrollToBottom() {
         requestAnimationFrame(() => {
-            this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+            this.messagesEl.scrollTo({
+                top: this.messagesEl.scrollHeight,
+                behavior: 'smooth'
+            });
         });
     }
 
@@ -873,7 +875,7 @@ export class LiveChatWidget {
 
     private showTypingIndicator(show: boolean) {
         if (this.typingIndicatorEl) {
-            this.typingIndicatorEl.style.display = show ? 'block' : 'none';
+            this.typingIndicatorEl.classList.toggle('show', show);
             if (show) this.scrollToBottom();
         }
     }

@@ -9,15 +9,15 @@ export const widgetStyles = `
     --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
     
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 999999;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    right: max(16px, env(safe-area-inset-right));
+    z-index: var(--livechat-z-index, 2140);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
 
   :host(.left) {
     right: auto;
-    left: 20px;
+    left: max(16px, env(safe-area-inset-left));
   }
 
   * { box-sizing: border-box; }
@@ -34,7 +34,9 @@ export const widgetStyles = `
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    will-change: transform, opacity, filter;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease, filter 180ms ease, box-shadow 220ms ease;
   }
 
   .livechat-toggle.horizontal {
@@ -47,7 +49,7 @@ export const widgetStyles = `
 
   .livechat-toggle.open {
     opacity: 0;
-    transform: scale(0.2);
+    transform: scale(0.88) translateY(8px);
     pointer-events: none;
   }
 
@@ -67,8 +69,9 @@ export const widgetStyles = `
   }
 
   .livechat-toggle:hover {
-    transform: scale(1.02);
-    filter: brightness(1.1);
+    transform: translateY(-1px) scale(1.02);
+    filter: brightness(1.05);
+    box-shadow: 0 14px 30px -12px rgba(15, 23, 42, 0.38);
   }
 
   .livechat-toggle svg {
@@ -105,9 +108,9 @@ export const widgetStyles = `
     position: absolute;
     bottom: 0px;
     right: 0;
-    width: 380px;
-    height: 600px;
-    max-height: calc(100vh - 120px);
+    width: min(380px, calc(100vw - 24px));
+    height: min(600px, calc(100dvh - 96px));
+    max-height: calc(100dvh - 96px);
     background: white;
     border-radius: 20px;
     box-shadow: var(--shadow);
@@ -117,8 +120,10 @@ export const widgetStyles = `
     transform-origin: bottom right;
     opacity: 0;
     visibility: hidden;
-    transform: scale(0.1) translateY(20px);
-    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+    will-change: transform, opacity;
+    transform: translateY(14px) scale(0.96);
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease, visibility 0s linear 180ms;
   }
 
   :host(.left) .livechat-window {
@@ -130,7 +135,9 @@ export const widgetStyles = `
   .livechat-window.open {
     opacity: 1;
     visibility: visible;
-    transform: scale(1) translateY(0);
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
   }
 
   .livechat-header {
@@ -141,6 +148,7 @@ export const widgetStyles = `
     align-items: center;
     gap: 12px;
     position: relative;
+    flex-shrink: 0;
   }
 
   .livechat-header.colored {
@@ -179,6 +187,14 @@ export const widgetStyles = `
     cursor: pointer;
     line-height: 1;
     padding: 4px;
+    border-radius: 10px;
+    transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+  }
+
+  .livechat-header-close:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text-main);
+    transform: scale(1.04);
   }
 
   .livechat-header.colored .livechat-header-close {
@@ -193,12 +209,16 @@ export const widgetStyles = `
     display: flex;
     flex-direction: column;
     gap: 12px;
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
   }
 
   .livechat-welcome {
     text-align: center;
     padding: 20px 0;
     color: var(--text-muted);
+    animation: livechat-fade-up 240ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .livechat-welcome-text {
@@ -213,6 +233,8 @@ export const widgetStyles = `
     font-size: 14px;
     line-height: 1.4;
     position: relative;
+    animation: livechat-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
   }
 
   .livechat-msg.visitor {
@@ -260,7 +282,7 @@ export const widgetStyles = `
     align-items: center;
     padding: 20px 0;
     width: 100%;
-    animation: fadeIn 0.5s ease;
+    animation: livechat-fade-up 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .livechat-event-avatar {
@@ -286,9 +308,17 @@ export const widgetStyles = `
     margin-top: 2px;
   }
 
-  @keyframes fadeIn {
+  @keyframes livechat-fade-up {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  .livechat-msg-row {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    position: relative;
+    animation: livechat-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .livechat-msg-time {
@@ -302,6 +332,7 @@ export const widgetStyles = `
     padding: 12px 14px;
     background: white;
     border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
   }
 
   .livechat-input-row {
@@ -312,6 +343,12 @@ export const widgetStyles = `
     border-radius: 20px;
     padding: 8px 14px;
     width: 100%;
+    transition: box-shadow 180ms ease, background-color 180ms ease;
+  }
+
+  .livechat-input-row:focus-within {
+    background: #ffffff;
+    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.24), 0 0 0 4px rgba(99, 102, 241, 0.08);
   }
 
   .livechat-input {
@@ -344,10 +381,15 @@ export const widgetStyles = `
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: color 0.2s;
+    border-radius: 10px;
+    transition: color 0.2s, background-color 0.2s, transform 0.2s;
   }
 
-  .livechat-action-btn:hover { color: var(--text-main); }
+  .livechat-action-btn:hover, .livechat-send-btn:hover {
+    color: var(--text-main);
+    background: rgba(148, 163, 184, 0.12);
+    transform: translateY(-1px);
+  }
 
   .livechat-send-btn {
     color: var(--primary-color);
@@ -375,6 +417,7 @@ export const widgetStyles = `
     display: flex;
     flex-direction: column;
     gap: 12px;
+    animation: livechat-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .livechat-offline-text {
@@ -422,6 +465,7 @@ export const widgetStyles = `
     color: var(--text-muted);
     background: white;
     border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
   }
 
   /* Emojis */
@@ -433,14 +477,25 @@ export const widgetStyles = `
     border-radius: 12px;
     box-shadow: var(--shadow);
     padding: 10px;
-    display: none;
+    display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 5px;
     z-index: 10;
     border: 1px solid var(--border-color);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(8px) scale(0.98);
+    transition: opacity 160ms ease, transform 180ms ease, visibility 0s linear 180ms;
   }
 
-  .livechat-emoji-picker.show { display: grid; }
+  .livechat-emoji-picker.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    transition: opacity 160ms ease, transform 180ms ease;
+  }
 
   .livechat-emoji-item {
     cursor: pointer;
@@ -511,7 +566,7 @@ export const widgetStyles = `
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.9);
-    z-index: 9999999;
+    z-index: calc(var(--livechat-z-index, 2140) + 20);
     display: none;
     align-items: center;
     justify-content: center;
@@ -540,7 +595,63 @@ export const widgetStyles = `
     font-style: italic;
     background: white;
     border-top: 1px solid var(--border-color);
-    display: none;
-    animation: fadeIn 0.3s ease;
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 180ms ease;
+  }
+
+  .livechat-typing-indicator.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (max-width: 640px) {
+    :host {
+      bottom: max(12px, env(safe-area-inset-bottom));
+      right: max(12px, env(safe-area-inset-right));
+    }
+
+    :host(.left) {
+      left: max(12px, env(safe-area-inset-left));
+    }
+
+    .livechat-window {
+      width: min(100vw - 24px, 380px);
+      height: min(70dvh, 560px);
+      max-height: min(70dvh, 560px);
+      border-radius: 18px;
+    }
+
+    .livechat-toggle.horizontal {
+      max-width: min(280px, calc(100vw - 24px));
+    }
+
+    .livechat-toggle-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .livechat-toggle,
+    .livechat-window,
+    .livechat-msg,
+    .livechat-msg-row,
+    .livechat-event,
+    .livechat-welcome,
+    .livechat-offline-form,
+    .livechat-typing-indicator,
+    .livechat-emoji-picker,
+    .livechat-action-btn,
+    .livechat-send-btn,
+    .livechat-header-close {
+      animation: none !important;
+      transition: none !important;
+    }
+
+    .livechat-messages {
+      scroll-behavior: auto;
+    }
   }
 `;

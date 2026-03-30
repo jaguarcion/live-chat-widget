@@ -273,7 +273,7 @@ export default function ChatWindow() {
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-surface relative">
+        <div className="flex-1 flex flex-col h-full min-h-0 bg-surface relative overflow-hidden">
             {/* Lightbox */}
             {lightboxImage && (
                 <div
@@ -285,19 +285,19 @@ export default function ChatWindow() {
             )}
 
             {/* Header */}
-            <div className="px-4 md:px-6 py-3 border-b border-border bg-surface flex items-center gap-3 z-10">
+            <div className="px-4 md:px-6 py-3 border-b border-border bg-surface flex items-center gap-3 z-10 shrink-0 min-w-0">
                 <img
                     src={getDiceBearUrl(activeConversation?.visitor.name || activeConversation?.visitor.email || activeConversation?.visitor.id)}
-                    className="w-10 h-10 rounded-full"
+                    className="w-10 h-10 rounded-full shrink-0"
                     alt=""
                 />
-                <div>
+                <div className="min-w-0">
                     <h3 className="text-[13px] font-semibold text-text-primary leading-[1.3]">
                         {activeConversation?.visitor.name || activeConversation?.visitor.email || 'Посетитель'}
                     </h3>
-                    <p className="text-[11px] font-normal text-text-muted mt-0.5 leading-none">{activeConversation?.project.name}</p>
+                    <p className="text-[11px] font-normal text-text-muted mt-0.5 leading-none truncate">{activeConversation?.project.name}</p>
                 </div>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-2 shrink-0">
                     {canClaimConversation && (
                         <button
                             onClick={handleClaimConversation}
@@ -317,7 +317,7 @@ export default function ChatWindow() {
             </div>
 
             {actionError && (
-                <div className="px-4 md:px-6 py-2 bg-red-50 border-b border-red-200 text-red-700 text-xs flex items-center justify-between gap-3">
+                <div className="px-4 md:px-6 py-2 bg-red-50 border-b border-red-200 text-red-700 text-xs flex items-center justify-between gap-3 ui-fade-slide-in shrink-0">
                     <span>{actionError}</span>
                     <button
                         onClick={() => setActionError('')}
@@ -329,9 +329,9 @@ export default function ChatWindow() {
             )}
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 bg-surface">
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 md:px-5 py-4 bg-surface ui-scroll-smooth dashboard-scroll-stable">
                 {messages.length === 0 && (
-                    <div className="text-center text-text-muted text-sm py-8">Нет сообщений</div>
+                    <div className="text-center text-text-muted text-sm py-8 ui-fade-slide-in">Нет сообщений</div>
                 )}
                 {messages.map((msg, idx) => {
                     const prev = idx > 0 ? messages[idx - 1] : null;
@@ -344,7 +344,7 @@ export default function ChatWindow() {
 
                     if (isSystem) {
                         return (
-                            <div key={msg.id}>
+                            <div key={msg.id} className="ui-fade-slide-in">
                                 {showDateSeparator && (
                                     <div className="relative my-4">
                                         <div className="h-px bg-border" />
@@ -370,7 +370,7 @@ export default function ChatWindow() {
 
                     if (isJoin) {
                         return (
-                            <div key={msg.id}>
+                            <div key={msg.id} className="ui-fade-slide-in">
                                 {showDateSeparator && (
                                     <div className="relative my-4">
                                         <div className="h-px bg-border" />
@@ -403,7 +403,7 @@ export default function ChatWindow() {
                     }
 
                     return (
-                        <div key={msg.id}>
+                        <div key={msg.id} className="ui-fade-slide-in">
                             {showDateSeparator && (
                                 <div className="relative my-4">
                                     <div className="h-px bg-border" />
@@ -485,7 +485,7 @@ export default function ChatWindow() {
                 })}
 
                 {activeConversationId && typingStatus[activeConversationId]?.isTyping && (
-                    <div className="flex flex-col gap-2 mt-4 animate-fade-in">
+                    <div className="flex flex-col gap-2 mt-4 ui-fade-slide-in">
                         <div className="flex items-center gap-2">
                             <img
                                 src={getDiceBearUrl(activeConversation?.visitor?.name || activeConversation?.visitor?.email || activeConversation?.visitor?.id)}
@@ -507,7 +507,7 @@ export default function ChatWindow() {
             </div>
 
             {/* Input Footer */}
-            <div className="p-4 border-t border-border bg-surface-secondary relative">
+            <div className="p-4 border-t border-border bg-surface-secondary relative shrink-0">
                 {activeConversation && (
                     <QuickRepliesPanel
                         projectId={activeConversation.projectId}
@@ -526,7 +526,7 @@ export default function ChatWindow() {
 
                 {/* Mention Dropdown */}
                 {mentionAnchor !== null && mentionQuery && (
-                    <div className="absolute bottom-[100%] left-4 right-4 mb-1 bg-surface-tertiary border border-border rounded-lg shadow-lg z-50 max-h-[200px] overflow-y-auto">
+                    <div className="absolute bottom-[100%] left-4 right-4 mb-1 bg-surface-tertiary border border-border rounded-lg shadow-lg z-50 max-h-[200px] overflow-y-auto ui-panel-in dashboard-scroll-stable">
                         <div className="py-1">
                             {members
                                 .filter(m => m.name && m.name.toLowerCase().includes(mentionQuery.toLowerCase()))

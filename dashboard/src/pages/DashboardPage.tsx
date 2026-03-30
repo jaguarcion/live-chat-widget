@@ -279,7 +279,7 @@ export default function DashboardPage({
 
     // Shared panel structure for chat and search modes
     const renderPanels = (listContent: ReactNode) => (
-        <div className="flex flex-1 min-w-0 min-h-0">
+        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
 
             {/* Conversation/Search list panel */}
             {/* Mobile: full-width when no active chat; hidden when chat is open */}
@@ -295,12 +295,12 @@ export default function DashboardPage({
 
             {/* Main chat/content area */}
             <div className={[
-                'flex-col min-w-0 flex-1',
+                'flex-col min-w-0 flex-1 overflow-hidden',
                 !mobileShowChat ? 'hidden md:flex' : 'flex',
             ].join(' ')}>
                 {/* Mobile back bar — shown only when conversation is open */}
                 {activeConversationId && (
-                    <div className="md:hidden flex items-center gap-2 px-3 py-2.5 border-b border-border bg-surface shrink-0 min-w-0">
+                    <div className="md:hidden flex items-center gap-2 px-3 py-2.5 border-b border-border bg-surface/95 backdrop-blur shrink-0 min-w-0">
                         <button
                             onClick={() => setActiveConversation(null)}
                             className="p-1.5 rounded-lg hover:bg-surface-tertiary transition-colors text-text-secondary shrink-0"
@@ -387,15 +387,15 @@ export default function DashboardPage({
 
             {/* Visitor info — xl+ as persistent sidebar */}
             {activeConversation && !showCreateProject && (
-                <div className="hidden xl:flex w-72 shrink-0 border-l border-border bg-surface-secondary flex-col">
+                <div className="hidden xl:flex w-72 shrink-0 border-l border-border bg-surface-secondary flex-col min-h-0">
                     <VisitorInfo conversation={activeConversation} />
                 </div>
             )}
 
             {/* Visitor info — mobile/tablet overlay (slide-in from right) */}
             {activeConversation && !showCreateProject && mobileShowInfo && (
-                <div className="xl:hidden fixed inset-0 z-50 flex justify-end" onClick={() => setMobileShowInfo(false)}>
-                    <div className="w-80 max-w-[88vw] bg-surface-secondary border-l border-border flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+                <div className="xl:hidden fixed inset-0 z-50 flex justify-end bg-black/20 backdrop-blur-[2px]" onClick={() => setMobileShowInfo(false)}>
+                    <div className="w-80 max-w-[88vw] bg-surface-secondary border-l border-border flex flex-col shadow-xl ui-panel-in min-h-0" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
                             <span className="font-semibold text-text-primary text-[15px]">Информация</span>
                             <button
@@ -422,8 +422,8 @@ export default function DashboardPage({
 
             <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
                 {showBackToProjects && activeProject && (
-                    <div className="px-4 py-3 border-b border-border bg-surface-secondary flex items-center justify-between gap-4 shrink-0">
-                        <div className="min-w-0 flex items-center gap-3">
+                    <div className="px-4 py-3 border-b border-border bg-surface-secondary flex flex-wrap items-center justify-between gap-4 shrink-0">
+                        <div className="min-w-0 flex items-center gap-3 flex-1">
                             <button
                                 onClick={() => navigate('/app')}
                                 className="px-3 py-1.5 rounded-lg bg-surface border border-border text-text-secondary hover:text-text-primary hover:bg-surface-tertiary transition-colors text-sm font-medium"
@@ -446,7 +446,7 @@ export default function DashboardPage({
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
                             <button
                                 onClick={() => setActiveView('chat')}
                                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeView === 'chat' ? 'bg-primary text-white' : 'bg-surface border border-border text-text-secondary hover:text-text-primary hover:bg-surface-tertiary'}`}
