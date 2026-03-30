@@ -336,7 +336,7 @@ export const widgetStyles = `
   .livechat-input-area {
     padding: 0;
     background: white;
-    border-top: 1px solid var(--border-color);
+    border-top: none;
     flex-shrink: 0;
   }
 
