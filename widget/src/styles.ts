@@ -345,7 +345,7 @@ export const widgetStyles = `
     align-items: flex-end;
     gap: 8px;
     background: var(--bg-light);
-    border-radius: 0;
+    border-radius: 20px;
     padding: 10px 14px;
     width: 100%;
     transition: box-shadow 180ms ease, background-color 180ms ease;

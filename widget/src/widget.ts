@@ -128,6 +128,11 @@ export class LiveChatWidget {
                     this.messages.push(msg);
                 }
 
+                // Avoid re-render flicker when server only confirms a temp visitor message.
+                if (replaced) {
+                    return;
+                }
+
                 this.renderMessages();
                 this.scrollToBottom();
                 if (!this.isOpen) {
@@ -519,7 +524,7 @@ export class LiveChatWidget {
         if (this.isOpen) {
             this.unreadCount = 0;
             this.updateBadge();
-            this.scrollToBottom();
+            this.scrollToBottom('auto');
             if (this.isOnline) {
                 this.inputEl.focus();
             }
@@ -833,11 +838,11 @@ export class LiveChatWidget {
         this.scrollToBottom();
     }
 
-    private scrollToBottom() {
+    private scrollToBottom(behavior: ScrollBehavior = 'smooth') {
         requestAnimationFrame(() => {
             this.messagesEl.scrollTo({
                 top: this.messagesEl.scrollHeight,
-                behavior: 'smooth'
+                behavior
             });
         });
     }
