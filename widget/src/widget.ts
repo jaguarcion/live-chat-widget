@@ -109,6 +109,10 @@ export class LiveChatWidget {
             const history = await getHistory(this.conversationId, this.widgetToken);
             this.messages = history;
             this.renderMessages();
+            // Position scroll at bottom immediately (widget not visible yet, no animation needed)
+            this.messagesEl.style.scrollBehavior = 'auto';
+            this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+            this.messagesEl.style.scrollBehavior = '';
 
             this.chatSocket.connect(this.conversationId, this.widgetToken, this.visitorId ?? undefined);
             this.startPageTracking();
@@ -524,7 +528,12 @@ export class LiveChatWidget {
         if (this.isOpen) {
             this.unreadCount = 0;
             this.updateBadge();
-            this.scrollToBottom('auto');
+            // Scroll synchronously before the browser paints so no visible scroll animation occurs
+            this.messagesEl.style.scrollBehavior = 'auto';
+            this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+            requestAnimationFrame(() => {
+                this.messagesEl.style.scrollBehavior = '';
+            });
             if (this.isOnline) {
                 this.inputEl.focus();
             }
@@ -839,12 +848,21 @@ export class LiveChatWidget {
     }
 
     private scrollToBottom(behavior: ScrollBehavior = 'smooth') {
-        requestAnimationFrame(() => {
-            this.messagesEl.scrollTo({
-                top: this.messagesEl.scrollHeight,
-                behavior
+        if (behavior !== 'smooth') {
+            // Override CSS scroll-behavior: smooth to get truly instant scroll
+            this.messagesEl.style.scrollBehavior = 'auto';
+            this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+            requestAnimationFrame(() => {
+                this.messagesEl.style.scrollBehavior = '';
             });
-        });
+        } else {
+            requestAnimationFrame(() => {
+                this.messagesEl.scrollTo({
+                    top: this.messagesEl.scrollHeight,
+                    behavior: 'smooth'
+                });
+            });
+        }
     }
 
     private updateBadge() {

@@ -183,13 +183,13 @@ export const widgetStyles = `
     background: none;
     border: none;
     color: var(--text-muted);
-    font-size: 24px;
+    font-size: 20px;
     cursor: pointer;
     line-height: 1;
-    width: 40px;
-    height: 40px;
+    width: 20px;
+    height: 20px;
     padding: 0;
-    border-radius: 0;
+    border-radius: 5px;
     display: flex;
     align-items: center;
     justify-content: center;

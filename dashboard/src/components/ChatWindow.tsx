@@ -24,6 +24,7 @@ export default function ChatWindow() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const isInitialMessagesLoadRef = useRef(false);
 
     const activeConversation = conversations.find(c => c.id === activeConversationId);
     const canSendMessage = !!activeConversationId && activeConversation?.status === 'OPEN';
@@ -37,8 +38,8 @@ export default function ChatWindow() {
         new Date(value).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 
     useEffect(() => {
-        // Instant scroll when switching conversation
-        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        // Mark that the next messages update is an initial load for this conversation
+        isInitialMessagesLoadRef.current = true;
     }, [activeConversationId]);
 
     useEffect(() => {
@@ -66,8 +67,11 @@ export default function ChatWindow() {
     }, [activeConversationId]); // 'conversations' intentionally omitted — read imperatively via getState()
 
     useEffect(() => {
-        // Smooth scroll for new messages (incoming or outgoing)
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        // Instant scroll on initial load, smooth scroll for new incoming/outgoing messages
+        if (!messages.length) return;
+        const behavior = isInitialMessagesLoadRef.current ? 'auto' : 'smooth';
+        isInitialMessagesLoadRef.current = false;
+        messagesEndRef.current?.scrollIntoView({ behavior });
     }, [messages]);
 
     useEffect(() => {
